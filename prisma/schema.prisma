@@ -14,9 +14,44 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id  String      @id @default(uuid())
+  aubnet_id   String   @unique
+  email       String   @unique
+  first_name  String
+  last_name   String
+  DOB         DateTime
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 }
+
+model RegisteredClubs {
+  user_id    String
+  club_id    String
+  role       String
+
+  @@id([user_id, club_id])
+}
+
+model Clubs {
+  id    String      @id @default(uuid())
+  CRN        String   @unique
+  Title      String
+  description String
+  image      String?
+  banner     String?
+}
+
+model Post {
+  id         String      @id @default(uuid())
+  student_id String
+}
+
+/***
+
+StudentUsers: student_id, aubnet_id, email, first_name, last_name, dob, created_at, updated_at
+RegisteredClubs: student_id (primary key, foreign key), club_id(primary key, foreign key), role
+Posts: post_id (primary key), student_id
+Upvotes:
+Clubs: club_id (primary key), CRN (unique), Title, description, image, banner
+
+***/
