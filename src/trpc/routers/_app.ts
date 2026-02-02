@@ -1,17 +1,11 @@
 import { z } from 'zod';
 import { baseProcedure, createTRPCRouter } from '../init';
+import { profileRouter } from '../../modules/students/server/profile';
+import { forYouRouter } from '../../modules/students/server/forYou';
+
 export const appRouter = createTRPCRouter({
-  createUser: baseProcedure
-    .input(
-      z.object({
-        text: z.string(),
-      }),
-    )
-    .query((opts) => {
-      return {
-        greeting: `hello ${opts.input.text}`,
-      };
-    }),
+  profile: profileRouter,
+  forYou: forYouRouter,
 });
 // export type definition of API
 export type AppRouter = typeof appRouter;
