@@ -1,5 +1,6 @@
 'use client';
 // ^-- to make sure we can mount the Provider from a server component
+import { createTRPCReact } from '@trpc/react-query'
 import type { QueryClient } from '@tanstack/react-query';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
@@ -9,6 +10,7 @@ import { makeQueryClient } from './query-client';
 import type { AppRouter } from './routers/_app';
 import superjson from 'superjson';
 export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
+export const trpc = createTRPCReact<AppRouter>()
 let browserQueryClient: QueryClient;
 function getQueryClient() {
   if (typeof window === 'undefined') {
