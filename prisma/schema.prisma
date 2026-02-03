@@ -28,7 +28,7 @@ enum PostType {
 
 model User {
   id        String   @id @default(uuid()) // Note: If using Clerk, you can remove @default(uuid()) and set this manually to the Clerk ID
-  aubnetId  String   @unique @map("aubnet_id")
+  aubnetId  Int      @unique @map("aubnet_id")
   email     String   @unique
   firstName String   @map("first_name")
   lastName  String   @map("last_name")
@@ -46,11 +46,11 @@ model User {
 
 model Club {
   id          String  @id @default(uuid())
-  crn         String  @unique
+  crn         Int     @unique
   title       String
   description String
-  image       String?
-  banner      String?
+  image_url       String?
+  banner_url     String?
 
   // Relations
   memberships Membership[]
@@ -83,6 +83,7 @@ model Post {
   id        String   @id @default(uuid())
   title     String
   content   String
+  postImages PostImage[]
   type      PostType @default(GENERAL)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -103,12 +104,27 @@ model Post {
   @@map("posts")
 }
 
+model PostImage {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  imageUrl  String   @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Performance: Indexes queries for "Get all images for this post"
+  @@index([postId]) 
+  
+  @@map("post_images")
+}
+
 model Upvote {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   postId    String   @map("post_id")
   createdAt DateTime @default(now()) @map("created_at")
-
+  updatedAt DateTime @updatedAt @map("updated_at")
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
