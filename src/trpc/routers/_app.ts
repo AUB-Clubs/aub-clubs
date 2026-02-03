@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { baseProcedure, createTRPCRouter } from '../init';
+import { clubsRouter } from '../../modules/Clubs/server/clubslist' ;
 export const appRouter = createTRPCRouter({
+  clubs : clubsRouter,
   createUser: baseProcedure
     .input(
       z.object({
