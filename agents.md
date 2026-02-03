@@ -7,7 +7,7 @@ This document serves as the authoritative guide for AI agents and developers wor
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS & Shadcn UI
 - **Database**: PostgreSQL (via Prisma ORM)
-- **API**: tRPC
+- **API**: tRPC, tanstack react query.
 - **Package Manager**: npm (implied by typical usage, check lockfile if unsure)
 
 ## 2. Directory Structure & Module Architecture (CRITICAL)
@@ -54,6 +54,7 @@ src/modules/<feature-name>/
 - Uses `@trpc/server` and `@trpc/client`.
 - **Routers**: Define procedure logic in `src/modules/<feature>/server/`.
 - **Client**: Consume via the tRPC hooks generated in `src/trpc/client.tsx` (or similar).
+- Remember to use react query in here for mutations and fetching.
 
 ## 4. Workflows & Scripts
 Adhere to the scripts defined in `package.json`:
