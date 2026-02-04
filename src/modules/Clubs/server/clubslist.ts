@@ -1,14 +1,14 @@
 import { z } from 'zod';
-import { publicProcedure, router } from '@/server/trpc';
-import { PrismaClient } from '../../../src/generated/prisma';
+import { baseProcedure, createTRPCRouter } from '../../../trpc/init';
+import { PrismaClient } from '../../../generated/prisma';
 const prisma= new PrismaClient();
 const ClubSchema=z.object({
     id : z.string(),
-    crn : z.string(),
+    crn : z.number(),
     title :z.string(),
     description :z.string(),
-    image :z.string().nullable(),
-    banner : z.string().nullable(),
+    image_url :z.string().nullable(),
+    banner_url : z.string().nullable(),
     _count : z.object({
         memberships : z.number(),
     }).optional(),
@@ -21,11 +21,11 @@ const ClubListSchema=z.array(ClubSchema);
 const GetClubByIdInput=z.object({
     id:z.string().uuid(),
 })
-export const clubsRouter=router({
-    getAllClubs : publicProcedure
+export const clubsRouter=createTRPCRouter({
+    getAllClubs : baseProcedure
         .output(ClubListSchema)
         .query(async function(){
-            const clubs= await Prisma.club.findMany({
+            const clubs= await prisma.club.findMany({
                 include:{
                     _count:{
                         select:{
@@ -36,11 +36,11 @@ export const clubsRouter=router({
             });
             return clubs;
         }),
-        getClubById : publicProcedure
+        getClubById : baseProcedure
         .input(GetClubByIdInput)
         .output(ClubSchema)
         .query(async function({ input }){
-            const club = await Prisma.club.findUnique({
+            const club = await prisma.club.findUnique({
                 where:{
                     id : input.id,
 
