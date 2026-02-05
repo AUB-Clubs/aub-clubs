@@ -1,11 +1,16 @@
 import Image from "next/image";
 
-import ForYouPage from '@/modules/students/ui/ForYouPage'
+// import ForYouPage from '@/modules/students/ui/ForYouPage'
+
+// export default function Page() {
+//   return <ForYouPage />
+// }
+
+import StudentPage from '@/modules/students/ui/StudentPage'
 
 export default function Page() {
-  return <ForYouPage />
+  return <StudentPage />
 }
-
 
 // export default function Home() {
 //   return (
