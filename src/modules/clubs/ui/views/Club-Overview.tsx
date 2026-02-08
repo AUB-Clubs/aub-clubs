@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { trpc } from '@/trpc/client'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -16,15 +17,27 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CalendarDays, FileText, Megaphone, Users } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { CalendarDays, FileText, Megaphone, Pencil, Users } from 'lucide-react'
 
 function formatRelativeTime(date: Date | string): string {
   const now = new Date()
@@ -110,11 +123,43 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
     { enabled: !!clubId }
   )
 
+  const utils = trpc.useUtils()
+  const createPostMutation = trpc.clubs.createPost.useMutation({
+    onSuccess: () => {
+      if (!clubId) return
+      utils.clubs.getForumPosts.invalidate({ clubId })
+      utils.clubs.getAnnouncements.invalidate({ clubId })
+      setPostDialogOpen(false)
+      setPostForm({ title: '', content: '', type: 'GENERAL' })
+    },
+  })
+
+  const [postDialogOpen, setPostDialogOpen] = useState(false)
+  const [postForm, setPostForm] = useState({
+    title: '',
+    content: '',
+    type: 'GENERAL' as 'GENERAL' | 'ANNOUNCEMENT',
+  })
+
+
+  const handleCreatePost = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!clubId || !postForm.title.trim() || !postForm.content.trim()) return
+    createPostMutation.mutate({
+      clubId,
+      title: postForm.title.trim(),
+      content: postForm.content.trim(),
+      type: postForm.type,
+    })
+  }
+
   const isLoading = overview.isLoading
   const error = overview.error?.message
   const club = overview.data?.club
   const stats = overview.data?.stats
   const role = overview.data?.role
+  const canPostAnnouncement =
+    role === 'PRESIDENT' || role === 'VICE_PRESIDENT'
   const members = membersQuery.data ?? []
   const announcements = announcementsQuery.data ?? []
   const forumPosts = forumPostsQuery.data ?? []
@@ -423,8 +468,109 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
           <TabsContent value="forum" className="mt-0">
             <Card className="overflow-hidden transition-shadow hover:shadow-md">
               <CardHeader className="pb-2">
-                <CardTitle>Forum</CardTitle>
-                <CardDescription>Discussions and posts.</CardDescription>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <CardTitle>Forum</CardTitle>
+                    <CardDescription>Discussions and posts.</CardDescription>
+                  </div>
+                  {!isLoading && club && (
+                    <Dialog open={postDialogOpen} onOpenChange={setPostDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="gap-1.5">
+                          <Pencil className="size-4" />
+                          New post
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>New post</DialogTitle>
+                          <DialogDescription>
+                            Share a discussion or, if you’re a club leader, post an announcement.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleCreatePost} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="post-title">Title</Label>
+                            <Input
+                              id="post-title"
+                              placeholder="Post title"
+                              value={postForm.title}
+                              onChange={(e) =>
+                                setPostForm((prev) => ({ ...prev, title: e.target.value }))
+                              }
+                              maxLength={500}
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="post-content">Content</Label>
+                            <Textarea
+                              id="post-content"
+                              placeholder="What’s on your mind?"
+                              value={postForm.content}
+                              onChange={(e) =>
+                                setPostForm((prev) => ({ ...prev, content: e.target.value }))
+                              }
+                              rows={4}
+                              maxLength={10000}
+                              required
+                            />
+                          </div>
+                          {canPostAnnouncement && (
+                            <div className="space-y-2">
+                              <Label>Post type</Label>
+                              <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="post-type"
+                                    checked={postForm.type === 'GENERAL'}
+                                    onChange={() =>
+                                      setPostForm((prev) => ({ ...prev, type: 'GENERAL' }))
+                                    }
+                                    className="rounded-full border-input"
+                                  />
+                                  <span className="text-sm">Discussion</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="post-type"
+                                    checked={postForm.type === 'ANNOUNCEMENT'}
+                                    onChange={() =>
+                                      setPostForm((prev) => ({ ...prev, type: 'ANNOUNCEMENT' }))
+                                    }
+                                    className="rounded-full border-input"
+                                  />
+                                  <span className="text-sm">Announcement</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                          <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setPostDialogOpen(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={
+                                createPostMutation.isPending ||
+                                !postForm.title.trim() ||
+                                !postForm.content.trim()
+                              }
+                            >
+                              {createPostMutation.isPending ? 'Posting…' : 'Post'}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {forumPostsQuery.isLoading ? (
