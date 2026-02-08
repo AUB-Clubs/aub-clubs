@@ -1,10 +1,8 @@
 import { z } from "zod"
-import { createTRPCRouter, baseProcedure } from "../../../trpc/init"
+import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 
 export const clubsRouter = createTRPCRouter({
-  ping: baseProcedure.query(({ ctx }) => ({ ok: true, userId: ctx.userId })),
-
   getOverview: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -168,5 +166,21 @@ export const clubsRouter = createTRPCRouter({
         },
       })
       return { id: post.id, title: post.title, content: post.content, type: post.type, createdAt: post.createdAt.toISOString() }
+    }),
+  getClubsList: baseProcedure
+    .query(async () => {
+      const clubs = await prisma.club.findMany({
+        include: {
+          _count: {
+            select: {
+              memberships: true,
+            },
+          },
+        },
+        orderBy: {
+          title: 'asc',
+        },
+      });
+      return clubs;
     }),
 })

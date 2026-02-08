@@ -4,7 +4,7 @@ import { trpc } from '@/trpc/client';
 import Link from 'next/link';
 
 export default function ClubList() {
-  const query = trpc.clubs.getAllClubs.useQuery();
+  const query = trpc.clubs.getClubsList.useQuery();
   const clubs = query.data;
   const isLoading = query.isLoading;
   const error = query.error;
