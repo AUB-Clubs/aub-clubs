@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import ClubOverview from "@/modules/clubs/ui/views/Club-Overview"
+import ClubOverview from "@/modules/Clubs/ui/views/Club-Overview"
 
 export default function ClubPage() {
   return <ClubOverview />
