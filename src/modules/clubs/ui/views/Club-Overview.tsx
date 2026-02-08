@@ -90,13 +90,12 @@ interface ClubAnnouncement {
 
 interface ClubForumPost {
   id: string
-  type: 'announcement' | 'discussion'
+  type: string
   title: string
   content?: string
   author: string
   authorId: string
   role: string
-  commentsCount: number
   upvoteCount: number
   createdAt: string
 }
