@@ -1,4 +1,4 @@
-import ClubOverview from '@/modules/clubs/ui/views/Club-Overview'
+import ClubOverview from '@/modules/Clubs/ui/views/Club-Overview'
 
 interface ClubPageProps {
   params: Promise<{ clubId: string }>
