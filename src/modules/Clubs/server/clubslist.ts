@@ -21,7 +21,7 @@ const ClubListSchema=z.array(ClubSchema);
 const GetClubByIdInput=z.object({
     id:z.string().uuid(),
 })
-export const clubsRouter=createTRPCRouter({
+export const clubsListRouter=createTRPCRouter({
     getAllClubs : baseProcedure
         .output(ClubListSchema)
         .query(async function(){
