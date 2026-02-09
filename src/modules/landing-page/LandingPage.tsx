@@ -1,7 +1,8 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Link } from "lucide-react";
+import { ArrowRight, CalendarCheck, Users } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -32,9 +33,7 @@ export default function LandingPage() {
                       <Button className="group relative flex items-center justify-center h-16 px-10 rounded-full bg-[#840132] text-white text-lg font-bold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto">
                         <span className="flex items-center gap-2">
                           Explore
-                          <span className="material-symbols-outlined text-[24px] group-hover:translate-x-1 transition-transform">
-                            arrow_forward
-                          </span>
+                          <ArrowRight className="h-6 w-6 group-hover:translate-x-1 transition-transform" />
                         </span>
                       </Button>
                     </Link>
@@ -64,9 +63,7 @@ export default function LandingPage() {
                       <Card className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 flex items-center gap-4 self-start translate-x-[-10%] opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-700">
                         <CardContent className="p-4 flex items-center gap-4">
                           <div className="bg-primary/10 p-2.5 rounded-xl text-primary">
-                            <span className="material-symbols-outlined">
-                              event_available
-                            </span>
+                            <CalendarCheck className="h-6 w-6" />
                           </div>
                           <div>
                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
@@ -82,9 +79,7 @@ export default function LandingPage() {
                       <Card className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 flex items-center gap-4 self-end translate-x-[10%] opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-700 delay-100">
                         <CardContent className="p-4 flex items-center gap-4">
                           <div className="bg-primary p-2.5 rounded-xl text-white">
-                            <span className="material-symbols-outlined">
-                              groups
-                            </span>
+                            <Users className="h-6 w-6" />
                           </div>
                           <div>
                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
