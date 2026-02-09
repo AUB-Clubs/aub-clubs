@@ -1,14 +1,11 @@
 import Image from "next/image";
-import { Navbar } from "@/modules/landing-page/navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import studentsImage from "@/modules/images/studentsImage.png";
+import { Link } from "lucide-react";
 
 export default function LandingPage() {
   return (
     <div className="bg-background-light dark:bg-background-dark text-[#840132] dark:text-white font-display min-h-screen flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
-      <Navbar />
-
       <main className="flex-grow flex flex-col justify-center relative">
         <div className="w-full px-6 lg:px-12 xl:px-40 py-12 lg:py-24">
           <div className="max-w-[1280px] mx-auto grid lg:grid-cols-2 gap-12 lg:gap-24 items-center">
@@ -31,14 +28,16 @@ export default function LandingPage() {
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                    <Button className="group relative flex items-center justify-center h-16 px-10 rounded-full bg-[#840132] text-white text-lg font-bold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto">
-                      <span className="flex items-center gap-2">
-                        Explore Clubs
-                        <span className="material-symbols-outlined text-[24px] group-hover:translate-x-1 transition-transform">
-                          arrow_forward
+                    <Link href="/profile">
+                      <Button className="group relative flex items-center justify-center h-16 px-10 rounded-full bg-[#840132] text-white text-lg font-bold shadow-2xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto">
+                        <span className="flex items-center gap-2">
+                          Explore
+                          <span className="material-symbols-outlined text-[24px] group-hover:translate-x-1 transition-transform">
+                            arrow_forward
+                          </span>
                         </span>
-                      </span>
-                    </Button>
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
@@ -51,7 +50,7 @@ export default function LandingPage() {
                 <CardContent className="p-0 h-full">
                   <div className="relative w-full h-full">
                     <Image
-                      src={studentsImage}
+                      src={"/image.png"}
                       alt="AUB campus clubs"
                       fill
                       priority
@@ -109,9 +108,9 @@ export default function LandingPage() {
       <footer className="w-full py-12 border-t border-[#E5E5E0] dark:border-white/5">
         <div className="px-6 lg:px-12 xl:px-40 flex flex-col items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <p className="font-bold text-[#111418] dark:text-white">
-            AUB Clubs Branded Platform
+            AUB Clubs Platform
           </p>
-          <p>© 2024 American University of Beirut. All rights reserved.</p>
+          <p>© 2026 American University of Beirut. All rights reserved.</p>
         </div>
       </footer>
     </div>
