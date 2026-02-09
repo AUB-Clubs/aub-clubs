@@ -40,7 +40,7 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarDays, FileText, Megaphone, Pencil, ThumbsUp, Users } from 'lucide-react'
+import { CalendarDays, FileText, Megaphone, Pencil, ThumbsUp, Users, Heart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function formatRelativeTime(date: Date | string): string {
@@ -594,14 +594,18 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 variant="ghost"
                                 size="sm"
                                 className={cn(
-                                  "h-auto gap-1.5 p-0 px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-                                  announcement.isUpvoted && "text-primary hover:text-primary"
+                                  "h-8 gap-1.5 px-2 text-muted-foreground hover:bg-transparent hover:text-red-500",
+                                  announcement.isUpvoted && "text-red-500"
                                 )}
                                 onClick={(e) => handleUpvote(e, announcement.id)}
                               >
-                                <ThumbsUp className={cn("size-3.5", announcement.isUpvoted && "fill-current")} />
-                                {announcement.upvoteCount}
-                                <span className="sr-only">Upvotes</span>
+                                <Heart
+                                  className={cn(
+                                    "size-4 transition-all",
+                                    announcement.isUpvoted && "fill-current scale-110"
+                                  )}
+                                />
+                                <span>{announcement.upvoteCount}</span>
                               </Button>
                             </CardFooter>
                           </Card>
@@ -822,14 +826,18 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 variant="ghost"
                                 size="sm"
                                 className={cn(
-                                  "h-auto gap-1.5 p-0 px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-                                  post.isUpvoted && "text-primary hover:text-primary"
+                                  "h-8 gap-1.5 px-2 text-muted-foreground hover:bg-transparent hover:text-red-500",
+                                  post.isUpvoted && "text-red-500"
                                 )}
                                 onClick={(e) => handleUpvote(e, post.id)}
                               >
-                                <ThumbsUp className={cn("size-3.5", post.isUpvoted && "fill-current")} />
-                                {post.upvoteCount}
-                                <span className="sr-only">Upvotes</span>
+                                <Heart
+                                  className={cn(
+                                    "size-4 transition-all",
+                                    post.isUpvoted && "fill-current scale-110"
+                                  )}
+                                />
+                                <span>{post.upvoteCount}</span>
                               </Button>
                             </CardFooter>
                           </Card>

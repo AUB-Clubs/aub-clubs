@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { trpc } from '@/trpc/client'
+import { useInView } from 'react-intersection-observer'
 import {
   Card,
   CardContent,
@@ -14,7 +15,44 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Megaphone, FileText, Users } from 'lucide-react'
+import { Megaphone, FileText, Users, Heart } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function UpvoteButton({ postId, initialCount, initialLiked }: { postId: string, initialCount: number, initialLiked: boolean }) {
+  const [count, setCount] = useState(initialCount)
+  const [liked, setLiked] = useState(initialLiked)
+  const utils = trpc.useUtils()
+  
+  const toggleMutation = trpc.clubs.toggleUpvote.useMutation({
+    onMutate: async () => {
+       setLiked(prev => !prev)
+       setCount(prev => prev + (liked ? -1 : 1))
+    },
+    onError: () => {
+       setLiked(initialLiked)
+       setCount(initialCount)
+    },
+    onSuccess: () => {
+       // Optional: invalidate if we want strict consistency, but optimistic is usually enough for upvotes
+       // utils.forYou.getFeed.invalidate()
+    }
+  })
+
+  return (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className={cn("h-8 gap-1.5 px-2 text-muted-foreground hover:bg-transparent hover:text-red-500", liked && "text-red-500")}
+      onClick={(e) => {
+        e.stopPropagation()
+        toggleMutation.mutate({ postId })
+      }}
+    >
+      <Heart className={cn("size-4 transition-all", liked && "fill-current scale-110")} />
+      <span>{count}</span>
+    </Button>
+  )
+}
 
 function formatRelativeTime(date: Date): string {
   const now = new Date()
@@ -31,21 +69,27 @@ function formatRelativeTime(date: Date): string {
 }
 
 export default function ForYouPage() {
-  const [cursor, setCursor] = useState<string | null>(null)
+  const { ref, inView } = useInView()
 
-  const feedQuery = trpc.forYou.getFeed.useQuery(
-    { limit: 12, cursor: cursor ?? undefined },
-    { placeholderData: (prev) => prev }
+  const feedQuery = trpc.forYou.getFeed.useInfiniteQuery(
+    { limit: 12 },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    }
   )
 
-  const items = feedQuery.data?.items ?? []
-  const nextCursor = feedQuery.data?.nextCursor
+  useEffect(() => {
+    if (inView && feedQuery.hasNextPage) {
+      feedQuery.fetchNextPage()
+    }
+  }, [inView, feedQuery.hasNextPage])
+
+  const items = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
   const isLoading = feedQuery.isLoading
-  const isFetchingMore = feedQuery.isFetching && cursor != null
   const isEmpty = !isLoading && items.length === 0
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="w-full">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
         {/* Page header */}
         <header className="mb-8">
@@ -142,8 +186,9 @@ export default function ForYouPage() {
                             {a.content}
                           </p>
                         </CardContent>
-                        <CardFooter className="text-xs text-muted-foreground pt-0">
-                          {formatRelativeTime(a.created_at)}
+                        <CardFooter className="flex items-center justify-between pt-0 text-xs text-muted-foreground">
+                          <span>{formatRelativeTime(a.created_at)}</span>
+                          <UpvoteButton postId={a.id} initialCount={a.upvotes_count} initialLiked={a.has_upvoted} />
                         </CardFooter>
                       </Card>
                     </li>
@@ -187,8 +232,9 @@ export default function ForYouPage() {
                           {p.content}
                         </p>
                       </CardContent>
-                      <CardFooter className="text-xs text-muted-foreground pt-0">
-                        {formatRelativeTime(p.created_at)}
+                      <CardFooter className="flex items-center justify-between pt-0 text-xs text-muted-foreground">
+                        <span>{formatRelativeTime(p.created_at)}</span>
+                        <UpvoteButton postId={p.id} initialCount={p.upvotes_count} initialLiked={p.has_upvoted} />
                       </CardFooter>
                     </Card>
                   </li>
@@ -198,25 +244,17 @@ export default function ForYouPage() {
           </ScrollArea>
         )}
 
-        {/* Load more */}
-        {nextCursor && (
-          <div className="mt-6 flex justify-center">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setCursor(nextCursor)}
-              disabled={isFetchingMore}
-              className="min-w-[140px]"
-            >
-              {isFetchingMore ? (
-                <>
-                  <span className="animate-pulse">Loading</span>
-                  <span className="ml-1.5">…</span>
-                </>
-              ) : (
-                'Load more'
-              )}
-            </Button>
+        {/* Load more / Infinite Scroll Trigger */}
+        {feedQuery.hasNextPage && (
+          <div ref={ref} className="mt-6 flex justify-center py-4">
+            {feedQuery.isFetchingNextPage ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Loading more...
+              </div>
+            ) : (
+              <div className="h-4" />
+            )}
           </div>
         )}
       </div>

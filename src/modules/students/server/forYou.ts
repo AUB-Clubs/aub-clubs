@@ -21,78 +21,74 @@ export const forYouRouter = createTRPCRouter({
       const cursor = input?.cursor;
 
       // Get club ids the current user is registered in
-      const registrations = await prisma.registeredClubs.findMany({
-        where: { user_id: ctx.userId },
-        select: { club_id: true },
+      const memberships = await prisma.membership.findMany({
+        where: { userId: ctx.userId },
+        select: { clubId: true },
       });
-      const clubIds = registrations.map((r) => r.club_id);
+      const clubIds = memberships.map((m) => m.clubId);
+
       if (clubIds.length === 0) {
         return { items: [], nextCursor: null };
       }
 
-      // Fetch announcements from those clubs
-      const [announcements, posts] = await Promise.all([
-        prisma.announcement.findMany({
-          where: { club_id: { in: clubIds } },
-          orderBy: { created_at: 'desc' },
-          take: limit * 2, // fetch extra to merge with posts
-          include: {
-            club: {
-              select: { id: true, Title: true, CRN: true, image: true },
-            },
+      const posts = await prisma.post.findMany({
+        where: { clubId: { in: clubIds } },
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        cursor: cursor ? { id: cursor } : undefined,
+        skip: cursor ? 1 : 0,
+        include: {
+          club: {
+            select: { id: true, title: true, crn: true, image_url: true },
           },
-        }),
-        prisma.post.findMany({
-          where: { club_id: { in: clubIds } },
-          orderBy: { created_at: 'desc' },
-          take: limit * 2,
-          include: {
-            club: {
-              select: { id: true, Title: true, CRN: true, image: true },
-            },
-            author: {
-              select: {
+          author: {
+             select: {
                 id: true,
-                first_name: true,
-                last_name: true,
-                avatar_url: true,
-              },
-            },
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+             }
           },
-        }),
-      ]);
+          _count: { select: { upvotes: true } },
+          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+        },
+      });
 
-      // Merge and sort by created_at desc
-      type FeedItem =
-        | { type: 'announcement'; id: string; created_at: Date; data: (typeof announcements)[0] }
-        | { type: 'post'; id: string; created_at: Date; data: (typeof posts)[0] };
-      const items: FeedItem[] = [
-        ...announcements.map((a) => ({
-          type: 'announcement' as const,
-          id: a.id,
-          created_at: a.created_at,
-          data: a,
-        })),
-        ...posts.map((p) => ({
-          type: 'post' as const,
-          id: p.id,
-          created_at: p.created_at,
-          data: p,
-        })),
-      ].sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
-
-      // Apply cursor pagination: if cursor provided, skip until we pass it
-      let start = 0;
-      if (cursor) {
-        const idx = items.findIndex((i) => i.id === cursor);
-        start = idx === -1 ? 0 : idx + 1;
+      let nextCursor: typeof cursor | null = null;
+      if (posts.length > limit) {
+        const nextItem = posts.pop();
+        nextCursor = nextItem!.id;
       }
-      const page = items.slice(start, start + limit);
-      const nextCursor =
-        items.length > start + limit ? page[page.length - 1]?.id ?? null : null;
+
+      const items = posts.map((p) => ({
+        type: p.type === 'ANNOUNCEMENT' ? 'announcement' : 'post',
+        id: p.id,
+        created_at: p.createdAt,
+        data: {
+          ...p,
+          created_at: p.createdAt,
+          club: {
+            id: p.club.id,
+            Title: p.club.title,
+            CRN: p.club.crn,
+            image: p.club.image_url,
+          },
+          author: {
+            id: p.author.id,
+            first_name: p.author.firstName,
+            last_name: p.author.lastName,
+            avatar_url: p.author.avatarUrl,
+          },
+          upvotes_count: p._count.upvotes,
+          has_upvoted: p.upvotes.length > 0,
+        },
+      }));
+      
+      // Sort is handled by DB order by
+      // Cursor pagination is handled by DB
 
       return {
-        items: page,
+        items, // TS will infer the union type from the map
         nextCursor,
       };
     }),

@@ -97,7 +97,7 @@ export default function StudentPage() {
   const isLoading = profileQuery.isLoading
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-primary/10 via-secondary/10 to-accent/10">
+    <div className="w-full bg-background p-6">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
         {/* Hero / header */}
         <Card className="overflow-hidden border-none bg-linear-to-r from-primary via-primary/90 to-secondary text-primary-foreground shadow-xl">
