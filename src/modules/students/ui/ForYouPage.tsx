@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { trpc } from '@/trpc/client'
-import Image from 'next/image'
 import {
   Card,
   CardContent,

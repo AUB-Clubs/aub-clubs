@@ -1,7 +1,7 @@
-import LandingPage from "@/modules/landing-page/LandingPage";
+import StudentPage from "@/modules/Students/ui/StudentPage";
 
 export default function Home() {
   return (
-    <LandingPage/>
+    <StudentPage/>
   )
 }
