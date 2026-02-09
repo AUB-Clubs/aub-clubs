@@ -3,7 +3,7 @@ import { baseProcedure, createTRPCRouter } from '../init';
 import { clubsRouter } from '@/modules/Clubs/server/clubs';
 
 export const appRouter = createTRPCRouter({
-  clubs: clubsRouter,
+  clubs : clubsRouter,
   createUser: baseProcedure
     .input(
       z.object({
