@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { trpc } from '@/trpc/client'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useInView } from 'react-intersection-observer'
 import {
   Card,
+
   CardContent,
   CardDescription,
   CardFooter,
@@ -37,7 +40,8 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarDays, FileText, Megaphone, Pencil, Users } from 'lucide-react'
+import { CalendarDays, FileText, Megaphone, Pencil, ThumbsUp, Users } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 function formatRelativeTime(date: Date | string): string {
   const now = new Date()
@@ -86,6 +90,7 @@ interface ClubAnnouncement {
   authorId: string
   imageUrls: string[]
   upvoteCount: number
+  isUpvoted: boolean
 }
 
 interface ClubForumPost {
@@ -97,7 +102,9 @@ interface ClubForumPost {
   authorId: string
   role: string
   upvoteCount: number
+  imageUrls: string[]
   createdAt: string
+  isUpvoted: boolean
 }
 
 export interface ClubOverviewProps {
@@ -105,22 +112,76 @@ export interface ClubOverviewProps {
 }
 
 export default function ClubOverview({ clubId }: ClubOverviewProps) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const activeTab = searchParams.get('tab') || 'about'
+
+  const setActiveTab = (val: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', val)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  const { ref: announcementsRef, inView: announcementsInView } = useInView()
+  const { ref: forumRef, inView: forumInView } = useInView()
+
   const overview = trpc.clubs.getOverview.useQuery(
     { clubId: clubId! },
     { enabled: !!clubId }
   )
+
+  // Wait for overview to load before fetching heavy data
+  // This prevents one giant batched request that blocks the initial UI paint
+  const isOverviewLoaded = !!overview.data;
+
+  const statsQuery = trpc.clubs.getStats.useQuery(
+    { clubId: clubId! },
+    { enabled: !!clubId && isOverviewLoaded, refetchInterval: 5000 }
+  )
+
+  const membershipQuery = trpc.clubs.getMembership.useQuery(
+    { clubId: clubId! },
+    { enabled: !!clubId && isOverviewLoaded, refetchInterval: 5000 }
+  )
+
+  // Wait for stats to load before fetching heavy data lists
+  // This ensures the stats (small query) returns quickly and isn't batched with the heavy lists
+  const isStatsLoaded = !!statsQuery.data;
+
   const membersQuery = trpc.clubs.getMembers.useQuery(
     { clubId: clubId! },
-    { enabled: !!clubId }
+    { enabled: !!clubId && isStatsLoaded, refetchInterval: 5000 }
   )
-  const announcementsQuery = trpc.clubs.getAnnouncements.useQuery(
-    { clubId: clubId! },
-    { enabled: !!clubId }
+  const announcementsQuery = trpc.clubs.getAnnouncements.useInfiniteQuery(
+    { clubId: clubId!, limit: 5 },
+    { 
+      enabled: !!clubId && isStatsLoaded,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      refetchInterval: 5000,
+    }
   )
-  const forumPostsQuery = trpc.clubs.getForumPosts.useQuery(
-    { clubId: clubId!, limit: 20 },
-    { enabled: !!clubId }
+  const forumPostsQuery = trpc.clubs.getForumPosts.useInfiniteQuery(
+    { clubId: clubId!, limit: 5 },
+    { 
+      enabled: !!clubId && isStatsLoaded,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      refetchInterval: 5000,
+    }
   )
+
+  useEffect(() => {
+    if (announcementsInView && announcementsQuery.hasNextPage) {
+      announcementsQuery.fetchNextPage()
+    }
+  }, [announcementsInView, announcementsQuery.hasNextPage])
+
+  useEffect(() => {
+    if (forumInView && forumPostsQuery.hasNextPage) {
+      forumPostsQuery.fetchNextPage()
+    }
+  }, [forumInView, forumPostsQuery.hasNextPage])
 
   const utils = trpc.useUtils()
   const createPostMutation = trpc.clubs.createPost.useMutation({
@@ -132,6 +193,70 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       setPostForm({ title: '', content: '', type: 'GENERAL' })
     },
   })
+
+  const toggleUpvoteMutation = trpc.clubs.toggleUpvote.useMutation({
+    onMutate: async ({ postId }) => {
+      if (!clubId) return
+
+      await utils.clubs.getAnnouncements.cancel()
+      await utils.clubs.getForumPosts.cancel()
+
+      const previousAnnouncements = utils.clubs.getAnnouncements.getInfiniteData({ clubId, limit: 5 })
+      const previousForumPosts = utils.clubs.getForumPosts.getInfiniteData({ clubId, limit: 5 })
+
+      const updatePostInPage = (page: any) => ({
+        ...page,
+        items: page.items.map((post: any) => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              isUpvoted: !post.isUpvoted,
+              upvoteCount: post.isUpvoted ? post.upvoteCount - 1 : post.upvoteCount + 1,
+            }
+          }
+          return post
+        }),
+      })
+
+      utils.clubs.getAnnouncements.setInfiniteData({ clubId, limit: 5 }, (old) => {
+        if (!old) return old
+        return { ...old, pages: old.pages.map(updatePostInPage) }
+      })
+
+      utils.clubs.getForumPosts.setInfiniteData({ clubId, limit: 5 }, (old) => {
+        if (!old) return old
+        return { ...old, pages: old.pages.map(updatePostInPage) }
+      })
+
+      return { previousAnnouncements, previousForumPosts }
+    },
+    onError: (err, variables, context) => {
+      if (!clubId) return
+      if (context?.previousAnnouncements) {
+        utils.clubs.getAnnouncements.setInfiniteData(
+          { clubId, limit: 5 },
+          context.previousAnnouncements
+        )
+      }
+      if (context?.previousForumPosts) {
+        utils.clubs.getForumPosts.setInfiniteData(
+          { clubId, limit: 5 },
+          context.previousForumPosts
+        )
+      }
+    },
+    onSettled: () => {
+      if (!clubId) return
+      utils.clubs.getAnnouncements.invalidate({ clubId })
+      utils.clubs.getForumPosts.invalidate({ clubId })
+    },
+  })
+
+  const handleUpvote = (e: React.MouseEvent, postId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    toggleUpvoteMutation.mutate({ postId })
+  }
 
   const [postDialogOpen, setPostDialogOpen] = useState(false)
   const [postForm, setPostForm] = useState({
@@ -153,15 +278,19 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
   }
 
   const isLoading = overview.isLoading
+  const isStatsLoading = statsQuery.isLoading
+  const isMembershipLoading = membershipQuery.isLoading
+
   const error = overview.error?.message
   const club = overview.data?.club
-  const stats = overview.data?.stats
-  const role = overview.data?.role
+  const stats = statsQuery.data
+  const role = membershipQuery.data?.role
   const canPostAnnouncement =
     role === 'PRESIDENT' || role === 'VICE_PRESIDENT'
   const members = membersQuery.data ?? []
-  const announcements = announcementsQuery.data ?? []
-  const forumPosts = forumPostsQuery.data ?? []
+  
+  const announcements = announcementsQuery.data?.pages.flatMap(page => page.items) ?? []
+  const forumPosts = forumPostsQuery.data?.pages.flatMap(page => page.items) ?? []
 
   if (!clubId) {
     return (
@@ -209,7 +338,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
         {/* Header */}
         <header className="mb-8">
           <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-muted">
-            {club?.banner_url ? (
+            {isLoading ? (
+              <Skeleton className="h-full w-full bg-primary/10" />
+            ) : club?.banner_url ? (
               <Image
                 src={club.banner_url}
                 alt=""
@@ -223,47 +354,61 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
           </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between -mt-12 relative z-10 px-2 sm:px-0">
             <div className="flex items-end gap-4">
-              <Avatar
-                size="lg"
-                className="size-20 rounded-xl border-4 border-background shadow-lg"
-              >
-                {club?.image_url ? (
-                  <AvatarImage src={club.image_url} alt={club.title} />
-                ) : null}
-                <AvatarFallback className="rounded-xl bg-primary/10 text-primary text-2xl font-semibold">
-                  {club?.title?.slice(0, 2).toUpperCase() ?? '?'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="pb-1">
+              {isLoading ? (
+                <Skeleton className="size-20 rounded-xl border-4 border-background shadow-lg bg-sidebar animate-pulse" />
+              ) : (
+                <Avatar
+                  className="size-20 rounded-xl border-4 border-background shadow-lg"
+                >
+                  {club?.image_url ? (
+                    <AvatarImage src={club.image_url} alt={club.title} />
+                  ) : null}
+                  <AvatarFallback className="rounded-xl bg-primary/10 text-primary text-2xl font-semibold">
+                    {club?.title?.slice(0, 2).toUpperCase() ?? '?'}
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              <div className="pb-1 space-y-2">
                 {isLoading ? (
-                  <>
-                    <Skeleton className="mb-2 h-8 w-56" />
-                    <Skeleton className="h-4 w-32" />
-                  </>
+                  <Skeleton className="h-8 w-56 sm:h-9 sm:w-80 border-4 border-background/50 shadow-sm" />
                 ) : (
-                  <>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                      {club?.title}
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {stats?.members ?? 0} member{(stats?.members ?? 0) !== 1 ? 's' : ''}
-                      {stats && stats.postsThisWeek > 0
-                        ? ` · ${stats.postsThisWeek} posts this week`
-                        : ''}
-                    </p>
-                  </>
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                    {club?.title}
+                  </h1>
+                )}
+                
+                {isLoading || isStatsLoading ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {stats?.members ?? 0} member{(stats?.members ?? 0) !== 1 ? 's' : ''}
+                    {stats && stats.postsThisWeek > 0
+                      ? ` · ${stats.postsThisWeek} posts this week`
+                      : ''}
+                  </p>
                 )}
               </div>
             </div>
-            {!isLoading && role && (
+            
+            {isLoading || isMembershipLoading ? (
+              <Skeleton className="h-6 w-24 rounded-full" />
+            ) : role ? (
               <Badge variant="secondary" className="w-fit text-sm font-medium">
                 {roleLabels[role] ?? role}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="w-fit text-sm font-medium text-muted-foreground">
+                Not a member
               </Badge>
             )}
           </div>
         </header>
 
-        <Tabs defaultValue="about" className="w-full">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={setActiveTab} 
+          className="w-full"
+        >
           <TabsList className="mb-6 w-full flex flex-wrap h-auto gap-1 bg-muted p-1">
             <TabsTrigger value="about">About</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
@@ -280,11 +425,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
               </CardHeader>
               <CardContent className="space-y-2">
                 {isLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-4/5" />
-                    <Skeleton className="h-4 w-3/5" />
-                  </div>
+                  <Skeleton className="h-4 w-full" />
                 ) : (
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                     {club?.description || 'No description yet.'}
@@ -303,7 +444,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {membersQuery.isLoading ? (
+                {membersQuery.isLoading || !isStatsLoaded ? (
                   <div className="space-y-3">
                     {[1, 2, 3, 4].map((i) => (
                       <div
@@ -373,25 +514,22 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 <CardDescription>Official club announcements.</CardDescription>
               </CardHeader>
               <CardContent>
-                {announcementsQuery.isLoading ? (
+                {announcementsQuery.isLoading || !isStatsLoaded ? (
                   <div className="space-y-4">
                     {[1, 2].map((i) => (
                       <Card key={i} className="overflow-hidden">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center gap-3">
-                            <Skeleton className="size-11 rounded-full" />
-                            <div className="space-y-2">
-                              <Skeleton className="h-4 w-32" />
-                              <Skeleton className="h-3 w-24" />
-                            </div>
-                          </div>
+                        <CardHeader className="pb-2">
+                          <Skeleton className="h-5 w-24 rounded-full" />
                         </CardHeader>
                         <CardContent className="space-y-2">
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-4/5" />
+                          <Skeleton className="h-5 w-3/4" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-5/6" />
+                          </div>
                         </CardContent>
                         <CardFooter className="pt-0">
-                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-3 w-32" />
                         </CardFooter>
                       </Card>
                     ))}
@@ -426,10 +564,10 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-2">
-                              <h2 className="font-medium leading-snug text-foreground">
+                              <h2 className="text-sm font-semibold leading-none text-foreground">
                                 {announcement.title}
                               </h2>
-                              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                              <p className="whitespace-pre-wrap text-xs leading-snug text-muted-foreground">
                                 {announcement.content}
                               </p>
                               {announcement.imageUrls.length > 0 && (
@@ -450,13 +588,37 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 </div>
                               )}
                             </CardContent>
-                            <CardFooter className="pt-0 text-xs text-muted-foreground">
-                              {formatRelativeTime(announcement.createdAt)} · {announcement.upvoteCount} upvote
-                              {announcement.upvoteCount !== 1 ? 's' : ''}
+                            <CardFooter className="flex items-center justify-between pt-0 text-xs text-muted-foreground">
+                              <span>{formatRelativeTime(announcement.createdAt)}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                  "h-auto gap-1.5 p-0 px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground",
+                                  announcement.isUpvoted && "text-primary hover:text-primary"
+                                )}
+                                onClick={(e) => handleUpvote(e, announcement.id)}
+                              >
+                                <ThumbsUp className={cn("size-3.5", announcement.isUpvoted && "fill-current")} />
+                                {announcement.upvoteCount}
+                                <span className="sr-only">Upvotes</span>
+                              </Button>
                             </CardFooter>
                           </Card>
                         </li>
                       ))}
+                      {announcementsQuery.hasNextPage && (
+                        <li ref={announcementsRef} className="flex justify-center p-4">
+                          {announcementsQuery.isFetchingNextPage ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                              Loading more...
+                            </div>
+                          ) : (
+                            <div className="h-4" />
+                          )}
+                        </li>
+                      )}
                     </ul>
                   </ScrollArea>
                 )}
@@ -472,7 +634,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                     <CardTitle>Forum</CardTitle>
                     <CardDescription>Discussions and posts.</CardDescription>
                   </div>
-                  {!isLoading && club && (
+                  {!isLoading && club && role && (
                     <Dialog open={postDialogOpen} onOpenChange={setPostDialogOpen}>
                       <DialogTrigger asChild>
                         <Button size="sm" className="gap-1.5">
@@ -572,25 +734,22 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 </div>
               </CardHeader>
               <CardContent>
-                {forumPostsQuery.isLoading ? (
+                {forumPostsQuery.isLoading || !isStatsLoaded ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
                       <Card key={i} className="overflow-hidden">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center gap-3">
-                            <Skeleton className="size-11 rounded-full" />
-                            <div className="space-y-2">
-                              <Skeleton className="h-4 w-32" />
-                              <Skeleton className="h-3 w-24" />
-                            </div>
-                          </div>
+                        <CardHeader className="pb-2">
+                          <Skeleton className="h-5 w-24 rounded-full" />
                         </CardHeader>
                         <CardContent className="space-y-2">
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-3/5" />
+                          <Skeleton className="h-5 w-3/4" />
+                          <div className="space-y-1">
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-5/6" />
+                          </div>
                         </CardContent>
                         <CardFooter className="pt-0">
-                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-3 w-32" />
                         </CardFooter>
                       </Card>
                     ))}
@@ -628,23 +787,66 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                             </CardHeader>
                             <CardContent className="space-y-2">
                               {post.title ? (
-                                <h2 className="font-medium leading-snug text-foreground">
+                                <h2 className="text-sm font-semibold leading-none text-foreground">
                                   {post.title}
                                 </h2>
                               ) : null}
                               {post.content ? (
-                                <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                              <p className="line-clamp-3 whitespace-pre-wrap text-xs leading-snug text-muted-foreground">
                                   {post.content}
                                 </p>
                               ) : null}
+                              {post.imageUrls && post.imageUrls.length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                  {post.imageUrls.map((url, i) => (
+                                    <div
+                                      key={i}
+                                      className="relative h-24 w-24 overflow-hidden rounded-md bg-muted"
+                                    >
+                                      <Image
+                                        src={url}
+                                        alt=""
+                                        fill
+                                        className="object-cover"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </CardContent>
-                            <CardFooter className="pt-0 text-xs text-muted-foreground">
-                              {formatRelativeTime(post.createdAt)} · {roleLabels[post.role] ?? post.role} ·{' '}
-                              {post.upvoteCount} upvote{post.upvoteCount !== 1 ? 's' : ''}
+                            <CardFooter className="flex items-center justify-between pt-0 text-xs text-muted-foreground">
+                              <span>
+                                {formatRelativeTime(post.createdAt)} · {roleLabels[post.role] ?? post.role}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                  "h-auto gap-1.5 p-0 px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground",
+                                  post.isUpvoted && "text-primary hover:text-primary"
+                                )}
+                                onClick={(e) => handleUpvote(e, post.id)}
+                              >
+                                <ThumbsUp className={cn("size-3.5", post.isUpvoted && "fill-current")} />
+                                {post.upvoteCount}
+                                <span className="sr-only">Upvotes</span>
+                              </Button>
                             </CardFooter>
                           </Card>
                         </li>
                       ))}
+                      {forumPostsQuery.hasNextPage && (
+                        <li ref={forumRef} className="flex justify-center p-4">
+                          {forumPostsQuery.isFetchingNextPage ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                              Loading more...
+                            </div>
+                          ) : (
+                            <div className="h-4" />
+                          )}
+                        </li>
+                      )}
                     </ul>
                   </ScrollArea>
                 )}

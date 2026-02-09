@@ -51,6 +51,7 @@ async function main() {
       title: 'Computer Science Student Society',
       description: 'The official club for CMPS students at AUB.',
       image_url: 'https://placehold.co/100x100/png',
+      banner_url: 'https://placehold.co/1200x300/png',
     },
   });
 
@@ -59,7 +60,8 @@ async function main() {
       crn: 67890,
       title: 'AUB Robotics Club',
       description: 'Building the future, one robot at a time.',
-      image_url: 'https://placehold.co/1920x1080/png',
+      image_url: 'https://placehold.co/100x100/png',
+      banner_url: 'https://placehold.co/1200x300/png',
     },
   });
 
