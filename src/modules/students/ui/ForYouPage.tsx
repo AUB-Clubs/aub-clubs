@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from "next/link"
 import { trpc } from '@/trpc/client'
 import { useInView } from 'react-intersection-observer'
 import {
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Megaphone, FileText, Users, Heart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -70,12 +72,19 @@ function formatRelativeTime(date: Date): string {
 
 export default function ForYouPage() {
   const { ref, inView } = useInView()
+  const [filter, setFilter] = useState<'ALL' | 'ANNOUNCEMENT' | 'GENERAL'>('ALL')
+
+  // We fetch profile primarily to gate the feed fetch (prioritization)
+  const { data: profile, isLoading: isProfileLoading } = trpc.profile.get.useQuery(undefined, {
+      staleTime: 1000 * 60 * 5
+  })
 
   const feedQuery = trpc.forYou.getFeed.useInfiniteQuery(
-    { limit: 12 },
+    { limit: 12, filter },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       staleTime: 1000 * 60, // 1 minute
+      enabled: !!profile, // Wait for profile before fetching feed
     }
   )
 
@@ -102,8 +111,16 @@ export default function ForYouPage() {
           </p>
         </header>
 
+        <Tabs defaultValue="ALL" onValueChange={(val) => setFilter(val as 'ALL' | 'ANNOUNCEMENT' | 'GENERAL')} className="w-full mb-8">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="ALL">All</TabsTrigger>
+            <TabsTrigger value="ANNOUNCEMENT">Announcements</TabsTrigger>
+            <TabsTrigger value="GENERAL">Posts</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Loading skeleton */}
-        {isLoading && (
+        { (isProfileLoading || isLoading) && (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="overflow-hidden">
@@ -130,7 +147,7 @@ export default function ForYouPage() {
         )}
 
         {/* Empty state: no clubs or no posts */}
-        {isEmpty && (
+        {profile && isEmpty && (
           <Card className="border-dashed">
             <Empty className="py-12">
               <EmptyMedia variant="icon">
@@ -157,7 +174,7 @@ export default function ForYouPage() {
                     <li key={`announcement-${item.id}`}>
                       <Card className="overflow-hidden transition-shadow hover:shadow-md">
                         <CardHeader className="pb-2">
-                          <div className="flex flex-wrap items-center gap-2">
+                          <Link href={`/clubs/${a.club.id}`} className="group flex flex-wrap items-center gap-2 hover:opacity-80 transition-opacity">
                             <Avatar className="size-11 border-2 border-background shadow-sm">
                               {a.club.image ? (
                                 <AvatarImage src={a.club.image} alt={a.club.Title} />
@@ -167,7 +184,7 @@ export default function ForYouPage() {
                               </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-foreground truncate">
+                              <p className="font-semibold text-foreground truncate group-hover:underline decoration-primary/50 underline-offset-4">
                                 {a.club.Title}
                               </p>
                               <div className="flex items-center gap-2 mt-0.5">
@@ -177,7 +194,7 @@ export default function ForYouPage() {
                                 </Badge>
                               </div>
                             </div>
-                          </div>
+                          </Link>
                         </CardHeader>
                         <CardContent className="space-y-2">
                           <h2 className="font-medium text-foreground leading-snug">
@@ -201,7 +218,7 @@ export default function ForYouPage() {
                   <li key={`post-${item.id}`}>
                     <Card className="overflow-hidden transition-shadow hover:shadow-md">
                       <CardHeader className="pb-2">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/clubs/${p.club.id}`} className="group flex flex-wrap items-center gap-2 hover:opacity-80 transition-opacity">
                           <Avatar className="size-11 border-2 border-background shadow-sm">
                             {p.club.image ? (
                               <AvatarImage src={p.club.image} alt={p.club.Title} />
@@ -211,7 +228,7 @@ export default function ForYouPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground truncate">
+                            <p className="font-semibold text-foreground truncate group-hover:underline decoration-primary/50 underline-offset-4">
                               {p.club.Title}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
@@ -221,7 +238,7 @@ export default function ForYouPage() {
                               </Badge>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       </CardHeader>
                       <CardContent className="space-y-2">
                         {p.title ? (

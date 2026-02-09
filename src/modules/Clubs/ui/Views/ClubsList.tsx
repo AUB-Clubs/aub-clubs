@@ -39,10 +39,17 @@ export default function ClubList() {
   
   const limit = 10;
 
+  // Prioritize profile fetch (usually already started by Sidebar)
+  const { data: profile } = trpc.profile.get.useQuery(undefined, {
+      staleTime: 1000 * 60 * 5,
+  })
+
   const query = trpc.clubs.getClubsList.useQuery({ 
     page, 
     limit,
     search: searchParam 
+  }, {
+    enabled: !!profile // Wait for profile
   });
   
   const isLoading = query.isLoading;
@@ -101,7 +108,7 @@ export default function ClubList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {!profile || isLoading ? (
                   // Skeleton Rows
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>

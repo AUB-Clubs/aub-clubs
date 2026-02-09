@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { trpc } from '@/trpc/client'
 import {
   Card,
@@ -321,9 +322,10 @@ export default function StudentPage() {
                   ) : profile && profile.registered_clubs.length > 0 ? (
                     <div className="space-y-3">
                       {profile.registered_clubs.map((rc) => (
-                        <div
+                        <Link
                           key={rc.club.id}
-                          className="flex items-center gap-3 rounded-xl border border-secondary/40 bg-secondary/20 px-3 py-2"
+                          href={`/clubs/${rc.club.id}`}
+                          className="flex items-center gap-3 rounded-xl border border-secondary/40 bg-secondary/20 px-3 py-2 transition-colors hover:bg-secondary/40 hover:border-primary/20"
                         >
                           <Avatar className="size-9 border border-secondary/40 bg-background shadow-sm">
                             {rc.club.image ? (
@@ -334,7 +336,7 @@ export default function StudentPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold">
+                            <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
                               {rc.club.Title}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
@@ -347,7 +349,7 @@ export default function StudentPage() {
                           >
                             {rc.role}
                           </Badge>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   ) : (

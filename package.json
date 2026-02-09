@@ -10,7 +10,8 @@
     "lint": "eslint",
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "npx tsx prisma/seed.ts",
+    "studio": "npx prisma studio"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
@@ -77,6 +78,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.3.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.30",
     "@types/pg": "^8.16.0",
