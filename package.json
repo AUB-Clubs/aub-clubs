@@ -9,7 +9,7 @@
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
     "migrate": "npx prisma migrate dev",
-    "generate": "npx prisma generate -y",
+    "generate": "npx prisma generate",
     "seed": "npx tsx prisma/seed.ts",
     "studio": "npx prisma studio"
   },
