@@ -75,6 +75,7 @@ export default function ForYouPage() {
     { limit: 12 },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: 1000 * 60, // 1 minute
     }
   )
 

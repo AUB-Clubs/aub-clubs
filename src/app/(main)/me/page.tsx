@@ -1,6 +1,6 @@
 import ForYouPage from "@/modules/Students/ui/ForYouPage";
 
-export default function Home() {
+export default function MePage() {
   return (
     <ForYouPage/>
   )
