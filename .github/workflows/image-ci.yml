@@ -70,21 +70,37 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Task
-        uses: arduino/setup-task@v2
         with:
-          version: 3.x
+          token: ${{ secrets.AUB_CLUBS_PAT }}
+          fetch-depth: 0
 
       - name: Update Image Tags
         env:
           IMAGE_TAG: ${{ needs.generate-image-tag.outputs.image_tag }}
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ "${{ github.ref_name }}" == "staging" ]]; then
+            TARGET_BRANCH="staging"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            TARGET_BRANCH="main"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TARGET_BRANCH="main"
+          else
+            echo "Skipping update: Not on main, staging, or tag."
+            exit 0
+          fi
+
+          git checkout $TARGET_BRANCH
+          git pull origin $TARGET_BRANCH --rebase
+
           node operations/update_tags_json.js "${IMAGE_TAG}"
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          base: main
-          token: ${{ secrets.DEVOPS_DIRECTIVE_KUBERNETES_COURSE_GITHUB_ACTION_PAT }}
-          title: "Update image tags to (${{ needs.generate-image-tag.outputs.image_tag }})"
+          if [[ -n $(git status --porcelain tags.json) ]]; then
+            git add tags.json
+            git commit -m "Update image tags to ${IMAGE_TAG} [skip ci]"
+            git push origin $TARGET_BRANCH
+          else
+            echo "No changes to tags.json"
+          fi
