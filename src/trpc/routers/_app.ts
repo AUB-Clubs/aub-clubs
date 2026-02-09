@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { baseProcedure, createTRPCRouter } from '../init';
-import { profileRouter } from '../../modules/students/server/profile';
-import { forYouRouter } from '../../modules/students/server/forYou';
+import { profileRouter } from '../../modules/Students/server/profile';
+import { forYouRouter } from '../../modules/Students/server/forYou';
 import { clubsRouter } from '../../modules/Clubs/server/clubs';
 
 export const appRouter = createTRPCRouter({

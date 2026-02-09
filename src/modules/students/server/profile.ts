@@ -16,26 +16,26 @@ export const profileRouter = createTRPCRouter({
         where: { id: userId },
         select: {
           id: true,
-          aubnet_id: true,
+          aubnetId: true,
           email: true,
-          first_name: true,
-          last_name: true,
-          DOB: true,
+          firstName: true,
+          lastName: true,
+          dob: true,
           bio: true,
-          avatar_url: true,
+          avatarUrl: true,
           major: true,
           year: true,
-          created_at: true,
-          updated_at: true,
-          registered_clubs: {
+          createdAt: true,
+          updatedAt: true,
+          memberships: {
             select: {
               role: true,
               club: {
                 select: {
                   id: true,
-                  Title: true,
-                  CRN: true,
-                  image: true,
+                  title: true,
+                  crn: true,
+                  image_url: true,
                 },
               },
             },
@@ -45,9 +45,14 @@ export const profileRouter = createTRPCRouter({
       if (!user) return null;
       return {
         ...user,
-        registered_clubs: user.registered_clubs.map((rc) => ({
-          role: rc.role,
-          club: rc.club,
+        registered_clubs: user.memberships.map((m) => ({
+          role: m.role,
+          club: {
+            id: m.club.id,
+            Title: m.club.title,
+            CRN: m.club.crn,
+            image: m.club.image_url,
+          },
         })),
       };
     }),
@@ -67,7 +72,7 @@ export const profileRouter = createTRPCRouter({
         where: { id: userId },
         data: {
           ...(input.bio !== undefined && { bio: input.bio }),
-          ...(input.avatar_url !== undefined && { avatar_url: input.avatar_url }),
+          ...(input.avatar_url !== undefined && { avatarUrl: input.avatar_url }),
           ...(input.major !== undefined && { major: input.major }),
           ...(input.year !== undefined && { year: input.year }),
         },
