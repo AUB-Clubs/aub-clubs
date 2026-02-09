@@ -13,12 +13,14 @@ export const forYouRouter = createTRPCRouter({
         .object({
           limit: z.number().int().min(1).max(50).default(20),
           cursor: z.string().optional(),
+          filter: z.enum(['ALL', 'ANNOUNCEMENT', 'GENERAL']).optional().default('ALL'),
         })
         .optional()
     )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 20;
       const cursor = input?.cursor;
+      const filter = input?.filter ?? 'ALL';
 
       // Get club ids the current user is registered in
       const memberships = await prisma.membership.findMany({
@@ -30,9 +32,12 @@ export const forYouRouter = createTRPCRouter({
       if (clubIds.length === 0) {
         return { items: [], nextCursor: null };
       }
-
+      
       const posts = await prisma.post.findMany({
-        where: { clubId: { in: clubIds } },
+        where: {
+           clubId: { in: clubIds },
+           ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
+        },
         orderBy: { createdAt: 'desc' },
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
