@@ -1,7 +1,5 @@
 vars:
   - file: config/{{ args.environment }}.yaml
-  - file: ../../tags.json
-    name: images
 
 deployments:
   - path: namespaces
