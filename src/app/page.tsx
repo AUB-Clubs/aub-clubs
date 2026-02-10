@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import LandingPage from "@/modules/Landing-Page/LandingPage";
 
 export const metadata: Metadata = {
-  title: "Welcome",
+  title: "Welcome: AUB Clubs",
   description: "The central hub for all student clubs and activities at AUB.",
 };
 
