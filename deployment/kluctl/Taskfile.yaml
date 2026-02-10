@@ -79,7 +79,7 @@ tasks:
   gcp:create-subnet-staging:
     cmds:
       - |
-        gcloud compute networks subnets create subnet-1 \
+        gcloud compute networks subnets create subnet-2 \
           --network=${CLUSTER_NAME_STAGING} \
           --region=${GCP_REGION} \
           --range=10.0.0.0/20
@@ -94,9 +94,49 @@ tasks:
         gcloud container clusters create ${CLUSTER_NAME_STAGING} \
           --zone ${GCP_ZONE} \
           --network ${CLUSTER_NAME_STAGING} \
-          --subnetwork subnet-1 \
+          --subnetwork subnet-2 \
           --machine-type e2-standard-2 \
           --num-nodes 2 \
           --gateway-api=standard \
           --workload-pool={{.GCP_PROJECT_ID}}.svc.id.goog
+
+          --workload-pool={{.GCP_PROJECT_ID}}.svc.id.goog
+
+  tls:create-secret-staging:
+    desc: "Create TLS secret for staging"
+    cmds:
+      - gcloud container clusters get-credentials ${CLUSTER_NAME_STAGING} --zone ${GCP_ZONE}
+      - kubectl create namespace aub-clubs --dry-run=client -o yaml | kubectl apply -f -
+      - |
+        kubectl create secret tls my-tls-cert \
+          --cert=../../domain.cert.pem \
+          --key=../../private.key.pem \
+          --namespace=aub-clubs \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  tls:create-secret-production:
+    desc: "Create TLS secret for production"
+    cmds:
+      - gcloud container clusters get-credentials ${CLUSTER_NAME} --zone ${GCP_ZONE}
+      - kubectl create namespace aub-clubs --dry-run=client -o yaml | kubectl apply -f -
+      - |
+        kubectl create secret tls my-tls-cert \
+          --cert=../../domain.cert.pem \
+          --key=../../private.key.pem \
+          --namespace=aub-clubs \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  db:seed-staging:
+    desc: "Run database seeding job in staging"
+    cmds:
+      - gcloud container clusters get-credentials ${CLUSTER_NAME_STAGING} --zone ${GCP_ZONE}
+      - kubectl delete job db-seeding -n aub-clubs --ignore-not-found
+      - kubectl apply -f manual/Job.db-seeding.yaml
+
+  db:seed-production:
+    desc: "Run database seeding job in production"
+    cmds:
+      - gcloud container clusters get-credentials ${CLUSTER_NAME} --zone ${GCP_ZONE}
+      - kubectl delete job db-seeding -n aub-clubs --ignore-not-found
+      - kubectl apply -f manual/Job.db-seeding.yaml
 
