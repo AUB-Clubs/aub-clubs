@@ -5,7 +5,7 @@ export const createTRPCContext = cache(async () => {
   /**
    * @see: https://trpc.io/docs/server/context
    */
-  return { userId: 'a461d09d-4efe-4b55-a44d-0eec3f10f4bb' };
+  return { userId: "0000" };
 });
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>
