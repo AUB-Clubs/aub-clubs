@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { Suspense } from 'react';
 import { 
     SidebarProvider, 
     SidebarInset, 
@@ -8,6 +9,7 @@ import {
 } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/modules/Students/ui/components/Sidebar';
 import { ClubSearchBar } from '@/modules/Clubs/ui/components/ClubSearchBar';
+import { ClubSearchBarSkeleton } from '@/modules/Clubs/ui/components/Skeletons';
 import { Separator } from '@/components/ui/separator';
 
 export default function MainLayout({
@@ -25,7 +27,9 @@ export default function MainLayout({
           <Separator orientation="vertical" className="mr-2 h-4" />
           
           <div className="flex flex-1 justify-center">
-             <ClubSearchBar className="w-full max-w-md" />
+             <Suspense fallback={<ClubSearchBarSkeleton />}>
+               <ClubSearchBar className="w-full max-w-md" />
+             </Suspense>
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
