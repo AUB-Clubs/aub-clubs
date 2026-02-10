@@ -1,0 +1,18 @@
+apiVersion: gitops.kluctl.io/v1beta1
+kind: KluctlDeployment
+metadata:
+  name: aub-clubs
+  namespace: kluctl-gitops
+spec:
+  interval: 5m
+  source:
+    git:
+      url: https://github.com/AUB-Clubs/aub-clubs
+      path: deployment/kluctl
+      ref:
+        branch: main
+  target: production
+  context: gke_project-b2a5c546-f972-43e5-954_us-central1-a_aub-clubs-app
+  # let it automatically clean up orphan KluctlDeployment resources
+  prune: true
+  delete: true

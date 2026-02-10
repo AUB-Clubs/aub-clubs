@@ -1,0 +1,14 @@
+vars:
+  - file: config/{{ args.environment }}.yaml
+  - file: ../../tags.json
+    name: images
+
+deployments:
+  - path: namespaces
+  - barrier: true
+  - include: third-party
+  - barrier: true # postgres depends on cloudnative-pg being installed
+  - include: services
+
+commonLabels:
+  devopsdirective.com/course: "kubernetes-course"

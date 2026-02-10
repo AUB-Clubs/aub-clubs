@@ -33,6 +33,10 @@ model User {
   firstName String   @map("first_name")
   lastName  String   @map("last_name")
   dob       DateTime @map("dob")
+  bio       String?
+  avatarUrl String?  @map("avatar_url")
+  major     String?
+  year      Int?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

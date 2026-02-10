@@ -1,0 +1,4 @@
+deployments:
+  - include: postgres
+  - barrier: true
+  - include: next-app
