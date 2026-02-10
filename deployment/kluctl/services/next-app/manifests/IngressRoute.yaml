@@ -1,0 +1,16 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: next-app
+  namespace: aub-clubs
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ sharedVars.hostName }}`)
+      services:
+        - kind: Service
+          name: next-app
+          port: 3000
+          scheme: http
