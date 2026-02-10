@@ -86,42 +86,40 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Function to update and push
-          update_tag() {
-            local BRANCH=$1
-            local ENV=$2
-            
-            echo "Updating $ENV on branch $BRANCH"
-            
-            git checkout $BRANCH
-            git pull origin $BRANCH --rebase
-            
-            # Execute the update script
-            node operations/update_deployment_tags.js "${IMAGE_TAG}" "$ENV"
-            
-            # Delete tags.json if exists (legacy)
-            if [[ -f tags.json ]]; then
-               rm tags.json
-            fi
-
-            if [[ -n $(git status --porcelain) ]]; then
-              git add .
-              git commit -m "Update image tags to ${IMAGE_TAG} [skip ci]"
-              git push origin $BRANCH
-              echo "Successfully pushed to $BRANCH"
-            else
-              echo "No changes to commit for $BRANCH"
-            fi
-          }
-
-          if [[ "${{ github.ref_name }}" == "staging" ]]; then
-            update_tag "staging" "staging"
-          elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            update_tag "main" "production"
-            update_tag "staging" "staging"
-          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            update_tag "main" "production"
-          else
-            echo "Skipping update: Not on main, staging, or tag."
+          if [[ "${{ github.ref_type }}" != "branch" ]]; then
+            echo "Not a branch push (ref_type=${{ github.ref_type }}). Skipping update."
             exit 0
+          fi
+
+          BRANCH_NAME=${{ github.ref_name }}
+          
+          if [[ "$BRANCH_NAME" != "main" && "$BRANCH_NAME" != "staging" ]]; then
+             echo "Branch $BRANCH_NAME is not main or staging. Skipping."
+             exit 0
+          fi
+
+          echo "Checking out $BRANCH_NAME"
+          git checkout $BRANCH_NAME
+          git pull origin $BRANCH_NAME --rebase
+
+          echo "Updating deployment tags to $IMAGE_TAG on $BRANCH_NAME"
+          
+          # Update staging config
+          node operations/update_deployment_tags.js "${IMAGE_TAG}" "staging"
+          
+          # Update production config
+          node operations/update_deployment_tags.js "${IMAGE_TAG}" "production"
+
+          # Delete tags.json if exists (legacy)
+          if [[ -f tags.json ]]; then
+             rm tags.json
+          fi
+
+          if [[ -n $(git status --porcelain) ]]; then
+            git add .
+            git commit -m "Update image tags to ${IMAGE_TAG} [skip ci]"
+            git push origin $BRANCH_NAME
+            echo "Successfully pushed to $BRANCH_NAME"
+          else
+            echo "No changes to commit for $BRANCH_NAME"
           fi

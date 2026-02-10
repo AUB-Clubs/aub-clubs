@@ -9,7 +9,7 @@ spec:
     - websecure
   routes:
     - kind: Rule
-      match: Host(`{{ sharedVars.hostName }}`)
+      match: Host(`{{ sharedVars.hostName }}`) || PathPrefix(`/`)
       services:
         - kind: Service
           name: next-app
