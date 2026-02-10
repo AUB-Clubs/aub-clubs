@@ -8,3 +8,4 @@ README.md
 .env
 .DS_Store
 *.pem
+.helm-file
