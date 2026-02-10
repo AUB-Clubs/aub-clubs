@@ -23,7 +23,7 @@ export default function LandingPage() {
                   </h1>
 
                   <p className="text-lg md:text-xl text-muted-foreground font-normal leading-relaxed max-w-lg">
-                    Ditch the cluttered WhatsApp groups. Experience the unified
+                    Ditch the severely cluttered WhatsApp groups. Experience the unified
                     campus platform for event management, membership, and
                     vibrant student life at AUB.
                   </p>
