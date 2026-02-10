@@ -1,0 +1,64 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["image-ci"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only run if the CI pipeline succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      id-token: write # Required for the Workload Identity auth you just set up
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Pull the specific branch (staging or main) that triggered the build
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Set Environment Target
+        id: target
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          echo "Triggering branch is: $BRANCH"
+          
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
+            echo "cluster_name=aub-clubs-app" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == "staging" ]]; then
+            echo "env_name=staging" >> $GITHUB_OUTPUT
+            echo "cluster_name=aub-clubs-app-staging" >> $GITHUB_OUTPUT
+          else
+            echo "Branch $BRANCH is not supported for auto-deployment."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/550914868740/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-deployer@project-b2a5c546-f972-43e5-954.iam.gserviceaccount.com'
+
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ steps.target.outputs.cluster_name }}
+          location: us-central1-a
+          project_id: project-b2a5c546-f972-43e5-954
+
+      - name: Install Kluctl
+        run: |
+          curl -sL https://github.com/kluctl/kluctl/releases/download/v2.24.0/kluctl_v2.24.0_linux_amd64.tar.gz | tar xz
+          sudo mv kluctl /usr/local/bin/
+
+      - name: Deploy with Kluctl
+        run: |
+          cd deployment/kluctl
+          kluctl deploy -t ${{ steps.target.outputs.env_name }} --yes
