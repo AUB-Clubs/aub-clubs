@@ -10,3 +10,7 @@ ports:
     expose: true
     exposedPort: 443
     protocol: TCP
+
+ingressRoute:
+  dashboard:
+    enabled: false
