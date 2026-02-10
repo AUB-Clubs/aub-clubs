@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrator
+  namespace: aub-clubs
+  annotations:
+    kluctl.io/hook: pre-deploy
+    kluctl.io/delete-job-on-success: "true"
+    kluctl.io/hook-weight: "-10"
+spec:
+  template:
+    spec:
+      containers:
+        - name: migrate
+          image: hamzarach69/aub-clubs-migrate:{{ apiNode.version }}
+          args:
+            - -path=/app/migrations
+            - -database=$(DATABASE_URL)?sslmode=disable
+            - up
+          envFrom:
+            - secretRef:
+                name: next-app-database-url
+      restartPolicy: OnFailure
