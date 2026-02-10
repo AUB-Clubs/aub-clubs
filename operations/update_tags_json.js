@@ -18,7 +18,6 @@ try {
   const tags = JSON.parse(tagsContent);
 
   tags.next = newTag;
-  tags.seed = newTag;
   tags.migrate = newTag;
 
   fs.writeFileSync(tagsFilePath, JSON.stringify(tags, null, 2));
