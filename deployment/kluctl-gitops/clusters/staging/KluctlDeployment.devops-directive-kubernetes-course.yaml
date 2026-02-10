@@ -12,7 +12,7 @@ spec:
       ref:
         branch: staging
   target: staging
-  context: gke_project-b2a5c546-f972-43e5-954_us-central1-a_aub-clubs-app-staging
+  context: default
   # let it automatically clean up orphan KluctlDeployment resources
   prune: true
   delete: true
