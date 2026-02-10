@@ -6,6 +6,7 @@ metadata:
 spec:
   entryPoints:
     - web
+    - websecure
   routes:
     - kind: Rule
       match: Host(`{{ sharedVars.hostName }}`)
@@ -14,3 +15,5 @@ spec:
           name: next-app
           port: 3000
           scheme: http
+  tls:
+    secretName: my-tls-cert
