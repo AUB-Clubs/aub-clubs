@@ -21,6 +21,7 @@ async function main() {
   // Create 3 specific users (Alice, Bob, Charlie) first for deterministic testing
   const staticUsersData = [
     {
+      id: "0000",
       aubnetId: 10001,
       email: 'alice@aub.edu.lb',
       firstName: 'Alice',
