@@ -11,7 +11,7 @@ export const clubsRouter = createTRPCRouter({
       
       const club = await prisma.club.findUnique({
         where: { id: clubId },
-        select: { id: true, title: true, description: true, image_url: true, banner_url: true },
+        select: { id: true, title: true, description: true, imageUrl: true, bannerUrl: true },
       })
       
       if (!club) {

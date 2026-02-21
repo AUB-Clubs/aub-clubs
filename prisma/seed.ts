@@ -1,6 +1,7 @@
 import { prisma } from '../src/lib/prisma';
 import { ClubRole, PostType } from '../src/generated/prisma/enums';
 import { faker } from '@faker-js/faker';
+import { uuid } from 'zod';
 
 async function main() {
   console.log('Start seeding ...');
@@ -33,6 +34,7 @@ async function main() {
       avatarUrl: faker.image.avatar(),
     },
     {
+      id: "0001",
       aubnetId: 10002,
       email: 'bob@aub.edu.lb',
       firstName: 'Bob',
@@ -44,6 +46,7 @@ async function main() {
       avatarUrl: faker.image.avatar(),
     },
     {
+      id: "0002",
       aubnetId: 10003,
       email: 'charlie@aub.edu.lb',
       firstName: 'Charlie',
@@ -75,6 +78,7 @@ async function main() {
 
     const user = await prisma.user.create({
       data: {
+        id: faker.string.uuid(), // Generate a random UUID for Clerk User ID
         aubnetId: aubnetId,
         email: email, 
         firstName: firstName,
@@ -101,15 +105,15 @@ async function main() {
       crn: 12345,
       title: 'Computer Science Student Society',
       description: 'The official club for CMPS students at AUB.',
-      image_url: 'https://placehold.co/100x100/png',
-      banner_url: 'https://placehold.co/1200x300/png',
+      imageUrl: 'https://placehold.co/100x100/png',
+      bannerUrl: 'https://placehold.co/1200x300/png',
     },
     {
       crn: 67890,
       title: 'AUB Robotics Club',
       description: 'Building the future, one robot at a time.',
-      image_url: 'https://placehold.co/100x100/png',
-      banner_url: 'https://placehold.co/1200x300/png',
+      imageUrl: 'https://placehold.co/100x100/png',
+      bannerUrl: 'https://placehold.co/1200x300/png',
     }
   ];
 
@@ -126,8 +130,8 @@ async function main() {
         crn: 1000 + i, // Simple unique CRN
         title: clubTitle,
         description: faker.lorem.paragraph(),
-        image_url: faker.image.urlLoremFlickr({ category: 'abstract', width: 100, height: 100 }), // Using placeholders or faker image
-        banner_url: faker.image.urlLoremFlickr({ category: 'abstract', width: 1200, height: 300 }),
+        imageUrl: faker.image.urlLoremFlickr({ category: 'abstract', width: 100, height: 100 }), // Using placeholders or faker image
+        bannerUrl: faker.image.urlLoremFlickr({ category: 'abstract', width: 1200, height: 300 }),
       },
     });
     clubs.push(club);
