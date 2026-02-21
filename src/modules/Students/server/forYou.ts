@@ -44,7 +44,7 @@ export const forYouRouter = createTRPCRouter({
         skip: cursor ? 1 : 0,
         include: {
           club: {
-            select: { id: true, title: true, crn: true, image_url: true },
+            select: { id: true, title: true, crn: true, imageUrl: true },
           },
           author: {
              select: {
@@ -76,7 +76,7 @@ export const forYouRouter = createTRPCRouter({
             id: p.club.id,
             Title: p.club.title,
             CRN: p.club.crn,
-            image: p.club.image_url,
+            image: p.club.imageUrl,
           },
           author: {
             id: p.author.id,
