@@ -13,8 +13,29 @@ datasource db {
 
 enum ClubRole {
   MEMBER
-  PRESIDENT
+  BOARD         // Generic for logistics, treasurer, etc. (use customTitle for specifics)
   VICE_PRESIDENT
+  PRESIDENT
+}
+
+enum ClubType {
+  ACADEMIC
+  ARTS
+  BUSINESS
+  CAREER
+  CULTURAL
+  GAMING
+  MEDIA
+  SPORTS
+  SOCIAL
+  TECHNOLOGY
+  COMMUNITY_SERVICE
+  ENVIRONMENTAL
+  HEALTH_WELLNESS
+  RELIGIOUS
+  BEGINNER_FRIENDLY
+  COMPETITIVE
+  NETWORKING
 }
 
 enum PostType {
@@ -22,88 +43,136 @@ enum PostType {
   GENERAL
 }
 
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum PostAudience {
+  PUBLIC
+  MEMBERS_ONLY
+  BOARD_ONLY
+}
+
+enum MembershipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum MembershipAction {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  REVOKED // If an admin kicks an active member
+}
+
 // --------------------
 // Models
 // --------------------
 
 model User {
-  id        String   @id @default(uuid()) // Note: If using Clerk, you can remove @default(uuid()) and set this manually to the Clerk ID
-  aubnetId  Int      @unique @map("aubnet_id")
-  email     String   @unique
-  firstName String   @map("first_name")
-  lastName  String   @map("last_name")
-  dob       DateTime @map("dob")
-  bio       String?
-  avatarUrl String?  @map("avatar_url")
-  major     String?
-  year      Int?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String               @id // Clerk User ID - populated via Clerk Webhooks
+  aubnetId        Int                  @unique @map("aubnet_id")
+  email           String               @unique
+  firstName       String               @map("first_name")
+  lastName        String               @map("last_name")
+  dob             DateTime             @map("dob")
+  bio             String?
+  avatarUrl       String?              @map("avatar_url")
+  major           String?
+  year            Int?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
 
   // Relations
-  memberships Membership[]
-  posts       Post[]       @relation("AuthoredPosts")
-  upvotes     Upvote[]
+  memberships     Membership[]
+  posts           Post[]               @relation("AuthoredPosts")
+  upvotes         Upvote[]
+  performedAudits MembershipAuditLog[] @relation("AuditActor")
 
   @@map("users")
 }
 
 model Club {
-  id          String  @id @default(uuid())
-  crn         Int     @unique
-  title       String
-  description String
-  image_url       String?
-  banner_url     String?
+  id              String           @id @default(uuid())
+  crn             Int              @unique
+  title           String
+  description     String
+  imageUrl        String?          @map("image_url")
+  bannerUrl       String?          @map("banner_url")
+  
+  types           ClubType[]       // Cloud Native PG handles scalar arrays natively
 
   // Relations
-  memberships Membership[]
-  posts       Post[]
+  memberships     Membership[]
+  posts           Post[]
 
   @@map("clubs")
 }
 
 model Membership {
-  id       String   @id @default(uuid())
-  userId   String   @map("user_id")
-  clubId   String   @map("club_id")
-  role     ClubRole @default(MEMBER)
-  joinedAt DateTime @default(now()) @map("joined_at")
+  id          String               @id @default(uuid())
+  userId      String               @map("user_id")
+  clubId      String               @map("club_id")
+  role        ClubRole             @default(MEMBER)
+  customTitle String?              @map("custom_title") // e.g., "Logistics Coordinator"
+  status      MembershipStatus     @default(PENDING)
+  joinedAt    DateTime             @default(now()) @map("joined_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  // Relations
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club        Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  auditLogs   MembershipAuditLog[]
 
-  // 1. Uniqueness: A user can't join the same club twice
-  // 2. Performance: Implicitly indexes queries starting with 'userId' (e.g. "My Clubs")
   @@unique([userId, clubId])
-  
-  // Performance: Indexes queries for "Who is in this club?"
-  @@index([clubId]) 
+  @@index([clubId, status]) // Optimized for filtering active vs pending members
   
   @@map("memberships")
 }
 
-model Post {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  postImages PostImage[]
-  type      PostType @default(GENERAL)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Foreign Keys
-  authorId String @map("author_id")
-  clubId   String @map("club_id")
+model MembershipAuditLog {
+  id           String           @id @default(uuid())
+  membershipId String           @map("membership_id")
+  actorId      String           @map("actor_id") // The User ID of whoever clicked the button
+  action       MembershipAction
+  createdAt    DateTime         @default(now()) @map("created_at")
 
   // Relations
-  author  User     @relation("AuthoredPosts", fields: [authorId], references: [id])
-  club    Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  upvotes Upvote[]
+  membership   Membership       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  actor        User             @relation("AuditActor", fields: [actorId], references: [id])
 
-  // Performance: Critical for the Feed. 
-  // Fast filtering by Club AND sorting by Date in one step.
-  @@index([clubId, createdAt(sort: Desc)]) 
+  // Fast chronological lookup for a user's request history in a specific club
+  @@index([membershipId, createdAt(sort: Desc)]) 
+  
+  @@map("membership_audit_logs")
+}
+
+model Post {
+  id         String       @id @default(uuid())
+  title      String
+  content    String
+  type       PostType     @default(GENERAL)
+  
+  // Sprint 2 Additions
+  status     PostStatus   @default(DRAFT)
+  audience   PostAudience @default(PUBLIC)
+  
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  // Foreign Keys
+  authorId   String       @map("author_id")
+  clubId     String       @map("club_id")
+
+  // Relations
+  author     User         @relation("AuthoredPosts", fields: [authorId], references: [id])
+  club       Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  postImages PostImage[]
+  upvotes    Upvote[]
+
+  // Fast filtering by Club, Status, Audience, and Date
+  @@index([clubId, status, audience, createdAt(sort: Desc)]) 
   
   @@map("posts")
 }
@@ -117,7 +186,6 @@ model PostImage {
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  // Performance: Indexes queries for "Get all images for this post"
   @@index([postId]) 
   
   @@map("post_images")
@@ -129,14 +197,11 @@ model Upvote {
   postId    String   @map("post_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  // 1. Uniqueness: One vote per user per post
-  // 2. Performance: Implicitly indexes queries starting with 'userId'
   @@unique([userId, postId]) 
-  
-  // Performance: Indexes "Count total votes for this post"
   @@index([postId]) 
   
   @@map("upvotes")
