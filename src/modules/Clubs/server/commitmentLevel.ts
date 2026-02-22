@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { baseProcedure, createTRPCRouter } from '@/trpc/init';
-import { PrismaClient } from '@/generated/prisma';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
 
 function calculatedCommitmentLevel(post: { createdAt: Date } | null): "HIGH" | "MEDIUM" | "LOW" {
   if (!post) return "LOW";
