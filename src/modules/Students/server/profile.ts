@@ -35,7 +35,7 @@ export const profileRouter = createTRPCRouter({
                   id: true,
                   title: true,
                   crn: true,
-                  image_url: true,
+                  imageUrl: true,
                 },
               },
             },
@@ -51,7 +51,7 @@ export const profileRouter = createTRPCRouter({
             id: m.club.id,
             Title: m.club.title,
             CRN: m.club.crn,
-            image: m.club.image_url,
+            image: m.club.imageUrl,
           },
         })),
       };
