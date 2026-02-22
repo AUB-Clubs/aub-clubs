@@ -1,0 +1,21 @@
+[33m1efe9a2[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mnb/clubs-list[m[33m, [m[1;31morigin/nb/clubs-list[m[33m)[m Updated club list with new UI
+[33m9d34a5b[m fix: correct import paths and use baseProcedure/createTRPCRouter
+[33mcc4be79[m Merge remote changes from nb/clubs-list
+[33m994d8f7[m Add clubs API with getAllClubs and getClubById endpoints
+[33m47a5f11[m feat: add initial files for clubs list
+[33m48ca076[m refactor: Update TRPC client setup and provider usage
+[33mae9c586[m feat: Update database schema and migration for clubs, users, and post images
+[33m3a109a5[m feat: add initial files for clubs list
+[33mbbf24ca[m Update agents.md
+[33m5c738a1[m feat: Add AI Agent Guidelines & Architecture Documentation
+[33mbe1f77b[m[33m ([m[1;32mstaging[m[33m, [m[1;32mmain[m[33m, [m[1;32mbe/students-fyp[m[33m)[m fix: add trpc context
+[33m12ae76c[m fix: Make route and provider for trpc
+[33mefa55a1[m Merge pull request #1 from AUB-Clubs/hr/add-initial-database-models
+[33m4807949[m feat: Add initial database models and migration scripts for User, Club, Membership, Post, and Upvote
+[33m11302df[m feat: Add initial database models and migration scripts for User, RegisteredClubs, Clubs, and Post
+[33m90ac8de[m feat: Integrate TRPC with React Query and add necessary dependencies
+[33mb9c78f8[m feat: Setup Prisma ORM
+[33m830bc09[m feat: Add all shadcn components
+[33m79f752f[m feat: Initialize shadcn componenets
+[33m350320d[m feat: initialize Next.js app with global styles, layout, and homepage
+[33m2148694[m Initial readme commit

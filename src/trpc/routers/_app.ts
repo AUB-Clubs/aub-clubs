@@ -3,11 +3,13 @@ import { baseProcedure, createTRPCRouter } from '../init';
 import { profileRouter } from '../../modules/Students/server/profile';
 import { forYouRouter } from '../../modules/Students/server/forYou';
 import { clubsRouter } from '../../modules/Clubs/server/clubs';
+import { commitmentLevelRouter } from '../../modules/Clubs/server/commitmentLevel';
 
 export const appRouter = createTRPCRouter({
-  profile: profileRouter,
-  forYou: forYouRouter,
-  clubs : clubsRouter,
+  profile:         profileRouter,
+  forYou:          forYouRouter,
+  clubs:           clubsRouter,
+  commitmentLevel: commitmentLevelRouter,
   createUser: baseProcedure
     .input(
       z.object({
@@ -20,5 +22,5 @@ export const appRouter = createTRPCRouter({
       };
     }),
 });
-// export type definition of API
+
 export type AppRouter = typeof appRouter;
