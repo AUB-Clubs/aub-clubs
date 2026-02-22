@@ -223,7 +223,7 @@ export default function ClubList() {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-4">
                             <Avatar>
-                              <AvatarImage src={club.image_url ?? undefined} alt={club.title} />
+                              <AvatarImage src={club.imageUrl ?? undefined} alt={club.title} />
                               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                                 {club.title.charAt(0).toUpperCase()}
                               </AvatarFallback>
