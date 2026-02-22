@@ -11,7 +11,7 @@ export const clubsRouter = createTRPCRouter({
       
       const club = await prisma.club.findUnique({
         where: { id: clubId },
-        select: { id: true, title: true, description: true, image_url: true, banner_url: true },
+        select: { id: true, title: true, description: true, imageUrl: true, bannerUrl: true, types: true, _count: { select: { memberships: true } } },
       })
       
       if (!club) {
@@ -241,43 +241,62 @@ export const clubsRouter = createTRPCRouter({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(10),
         search: z.string().optional(),
+        type: z.enum(["ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",  "SPORTS", "SOCIAL", "TECHNOLOGY", "COMMUNITY_SERVICE", "ENVIRONMENTAL", "HEALTH_WELLNESS", "RELIGIOUS", "BEGINNER_FRIENDLY", "COMPETITIVE", "NETWORKING"]).optional(),
       })
+
     )
     .query(async ({ input }) => {
-      const { page, limit, search } = input;
+      const { page, limit, search, type } = input;
       const skip = (page - 1) * limit;
 
       const parsedCrn = search ? parseInt(search) : NaN;
       const isNumber = !isNaN(parsedCrn);
 
-      const where = search
-        ? {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' as const } },
-              { description: { contains: search, mode: 'insensitive' as const } },
-              ...(isNumber ? [{ crn: parsedCrn }] : []),
-            ],
-          }
-        : {};
+      const where: any = {};
 
-      const [clubs, totalCount] = await Promise.all([
-        prisma.club.findMany({
-          where,
-          take: limit,
-          skip: skip,
-          include: {
-            _count: {
-              select: {
-                memberships: true,
-              },
-            },
-          },
-          orderBy: {
-            title: 'asc',
-          },
-        }),
-        prisma.club.count({ where }),
-      ]);
+      if (search) {
+        const parsedCrn = parseInt(search);
+        const isNumber = !isNaN(parsedCrn);
+
+        where.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          ...(isNumber ? [{ crn: parsedCrn }] : []),
+        ];
+      }
+
+      if (type) {
+        where.types = {
+          has: type,
+        };
+      }
+
+
+
+const [clubs, totalCount] = await Promise.all([
+  prisma.club.findMany({
+    where,
+    take: limit,
+    skip,
+    select: {
+      id: true,
+      crn: true,
+      title: true,
+      description: true,
+      imageUrl: true,
+      types: true,
+      _count: {
+        select: {
+          memberships: true,
+        },
+      },
+    },
+    orderBy: {
+      title: 'asc',
+    },
+  }),
+  prisma.club.count({ where }),
+]);
 
       return {
         clubs,

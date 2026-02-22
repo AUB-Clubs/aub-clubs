@@ -5,6 +5,13 @@ import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { useDebounce } from 'use-debounce';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function ClubSearchBar({ className }: { className?: string }) {
   const router = useRouter();
@@ -15,6 +22,10 @@ export function ClubSearchBar({ className }: { className?: string }) {
   const [query, setQuery] = useState(
     pathname === '/clubs' ? (searchParams.get('search') || '') : ''
   );
+  const [type, setType] = useState(
+  pathname === '/clubs' ? (searchParams.get('type') || '') : ''
+  );
+
   
   const [debouncedQuery] = useDebounce(query, 300);
   const [isFocused, setIsFocused] = useState(false);
@@ -38,9 +49,12 @@ export function ClubSearchBar({ className }: { className?: string }) {
     if (!isFocused) {
        // If on /clubs, use the param. If elsewhere, clear it.
        const urlQuery = pathname === '/clubs' ? (searchParams.get('search') || '') : '';
+      const urlType = pathname === '/clubs' ? (searchParams.get('type') || '') : '';
+
        // Only update if different to avoid redundant renders
-       if (query !== urlQuery) {
+       if (query !== urlQuery || type !== urlType) {
            setQuery(urlQuery);
+           setType(urlType);
        }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,6 +75,12 @@ export function ClubSearchBar({ className }: { className?: string }) {
              } else {
                  params.delete('search');
              }
+
+             if (type) {
+              params.set('type', type);
+            } else {
+              params.delete('type');
+            }
              
              // Reset pagination when searching
              params.delete('page');
@@ -69,7 +89,8 @@ export function ClubSearchBar({ className }: { className?: string }) {
              router.replace(`/clubs?${params.toString()}`);
         }
     }
-  }, [debouncedQuery, pathname, router, searchParams]);
+  }, [debouncedQuery, type, pathname, router, searchParams]);
+
 
   // Handle form submission purely to prevent page reload if user hits enter
   const handleSubmit = (e: React.FormEvent) => {
@@ -77,7 +98,8 @@ export function ClubSearchBar({ className }: { className?: string }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className={`relative sm:w-[300px] md:w-[400px] ${className}`}>
+    <form onSubmit={handleSubmit} className={`flex items-center gap-3 sm:w-[500px] ${className}`}>
+      <div className="relative w-[300px]">
       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
       <Input
         ref={inputRef}
@@ -89,6 +111,20 @@ export function ClubSearchBar({ className }: { className?: string }) {
         onFocus={handleFocus}
         onBlur={handleBlur}
       />
+      </div>
+        <Select value={type} onValueChange={(value) => setType(value)}>
+        <SelectTrigger className="w-[180px] rounded-full">
+          <SelectValue placeholder="All Types" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All Types</SelectItem>
+          <SelectItem value="SOCIAL">Social</SelectItem>
+          <SelectItem value="CAREER">Career</SelectItem>
+          <SelectItem value="TECHNICAL">Technical</SelectItem>
+          <SelectItem value="CULTURAL">Cultural</SelectItem>
+          <SelectItem value="SPORTS">Sports</SelectItem>
+        </SelectContent>
+      </Select>
     </form>
   );
 }
