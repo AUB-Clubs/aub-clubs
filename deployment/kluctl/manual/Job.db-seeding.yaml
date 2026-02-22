@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-seeding
+  namespace: aub-clubs
+spec:
+  template:
+    spec:
+      containers:
+        - name: seed
+          image: hamzarach69/aub-clubs-seed:fcb3360
+          envFrom:
+            - secretRef:
+                name: next-app-database-url
+      restartPolicy: OnFailure
