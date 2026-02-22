@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import LandingPage from "@/modules/Landing-Page/LandingPage";
+import LandingPage from "@/modules/landing-page/LandingPage";
 
 export const metadata: Metadata = {
   title: "Welcome: AUB Clubs",

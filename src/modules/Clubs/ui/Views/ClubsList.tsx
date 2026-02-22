@@ -36,8 +36,13 @@ export default function ClubList() {
   // Get state from URL or defaults
   const page = Number(searchParams.get('page')) || 1;
   const searchParam = searchParams.get('search') || '';
-  
+  const typeParam = searchParams.get('type') || '';
+
   const limit = 10;
+
+  // Valid club types
+  const validClubTypes = ['ACADEMIC', 'ARTS', 'BUSINESS', 'CAREER', 'CULTURAL', 'GAMING', 'MEDIA', 'SPORTS', 'SOCIAL', 'TECHNOLOGY', 'COMMUNITY_SERVICE', 'ENVIRONMENTAL', 'HEALTH_WELLNESS'];
+  const type = typeParam && validClubTypes.includes(typeParam) ? typeParam : undefined;
 
   // Prioritize profile fetch (usually already started by Sidebar)
   const { data: profile } = trpc.profile.get.useQuery(undefined, {
@@ -47,7 +52,8 @@ export default function ClubList() {
   const query = trpc.clubs.getClubsList.useQuery({ 
     page, 
     limit,
-    search: searchParam 
+    search: searchParam,
+    type: type as any,
   }, {
     enabled: !!profile // Wait for profile
   });
@@ -82,6 +88,7 @@ export default function ClubList() {
             <h1 className="text-3xl font-bold tracking-tight">Available Clubs</h1>
             <div className="text-muted-foreground text-sm h-5">
                  {searchParam && `Results for "${searchParam}"`}
+                 {typeParam && ` • Type: ${typeParam}`}
             </div>
         </div>
       </div>
@@ -102,6 +109,7 @@ export default function ClubList() {
                 <TableRow>
                   <TableHead className="w-[300px]">Club</TableHead>
                   <TableHead>CRN</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead className="max-w-[300px]">Description</TableHead>
                   <TableHead>Members</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
@@ -147,7 +155,7 @@ export default function ClubList() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-4">
                           <Avatar>
-                            <AvatarImage src={club.image_url ?? undefined} alt={club.title} />
+                            <AvatarImage src={club.imageUrl ?? undefined} alt={club.title} />
                             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                               {club.title.charAt(0).toUpperCase()}
                             </AvatarFallback>
@@ -157,6 +165,11 @@ export default function ClubList() {
                       </TableCell>
                       <TableCell>{club.crn}</TableCell>
                       <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {club.types}
+                        </div>
+                      </TableCell>
+                     <TableCell>
                         <p className="line-clamp-2 max-w-md text-muted-foreground">
                           {club.description}
                         </p>
@@ -181,7 +194,7 @@ export default function ClubList() {
                 ) : (
                   // Empty State
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={6} className="h-24 text-center">
                       No clubs found
                     </TableCell>
                   </TableRow>

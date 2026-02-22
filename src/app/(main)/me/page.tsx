@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import ForYouPage from "@/modules/Students/ui/ForYouPage";
+import ForYouPage from "@/modules/students/ui/ForYouPage";
 
 export const metadata: Metadata = {
   title: "For You",

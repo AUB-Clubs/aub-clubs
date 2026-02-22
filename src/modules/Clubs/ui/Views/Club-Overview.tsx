@@ -340,9 +340,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
           <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-muted">
             {isLoading ? (
               <Skeleton className="h-full w-full bg-primary/10" />
-            ) : club?.banner_url ? (
+            ) : club?.bannerUrl ? (
               <Image
-                src={club.banner_url}
+                src={club.bannerUrl}
                 alt=""
                 width={1200}
                 height={160}
@@ -360,8 +360,8 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 <Avatar
                   className="size-20 rounded-xl border-4 border-background shadow-lg"
                 >
-                  {club?.image_url ? (
-                    <AvatarImage src={club.image_url} alt={club.title} />
+                  {club?.imageUrl ? (
+                    <AvatarImage src={club.imageUrl} alt={club.title} />
                   ) : null}
                   <AvatarFallback className="rounded-xl bg-primary/10 text-primary text-2xl font-semibold">
                     {club?.title?.slice(0, 2).toUpperCase() ?? '?'}
@@ -372,9 +372,27 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 {isLoading ? (
                   <Skeleton className="h-8 w-56 sm:h-9 sm:w-80 border-4 border-background/50 shadow-sm" />
                 ) : (
+                <div className="space-y-2">
                   <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                     {club?.title}
                   </h1>
+
+                  {/* Club Types */}
+                  {!isLoading && club?.types && (club.types as string[])?.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {(club.types as string[]).map((type: string) => (
+                        <Badge
+                          key={type}
+                          variant="outline"
+                          className="text-xs font-medium"
+                        >
+                          {type.replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 )}
                 
                 {isLoading || isStatsLoading ? (
