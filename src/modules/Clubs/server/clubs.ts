@@ -2,8 +2,11 @@ import { z } from "zod"
 import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
+import { memberManagementRouter } from "./member-management"
 
 export const clubsRouter = createTRPCRouter({
+  memberManagement: memberManagementRouter,
+  
   getOverview: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
