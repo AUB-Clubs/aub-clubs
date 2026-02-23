@@ -4,6 +4,42 @@ import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
 
 export const clubsRouter = createTRPCRouter({
+requestJoin: baseProcedure
+  .input(z.object({ clubId: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    const { clubId } = input;
+    const userId = ctx.userId;
+
+    const existing = await prisma.membership.findUnique({
+      where: { userId_clubId: { userId, clubId } },
+      select: { id: true, status: true },
+    });
+
+
+    if (existing?.status === "ACCEPTED") return { ok: true, status: "ACCEPTED" as const };
+    if (existing?.status === "PENDING") return { ok: true, status: "PENDING" as const };
+
+
+    if (existing?.status === "REJECTED") {
+      await prisma.membership.update({
+        where: { userId_clubId: { userId, clubId } },
+        data: { status: "PENDING" },
+      });
+      return { ok: true, status: "PENDING" as const };
+    }
+
+    await prisma.membership.create({
+      data: {
+        userId,
+        clubId,
+        role: "MEMBER",
+        status: "PENDING",
+      },
+    });
+
+    return { ok: true, status: "PENDING" as const };
+  }),
+
   getOverview: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
@@ -38,16 +74,21 @@ export const clubsRouter = createTRPCRouter({
       return { members: membersCount, postsThisWeek }
     }),
   
-  getMembership: baseProcedure
-    .input(z.object({ clubId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const { clubId } = input
-      const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId } },
-        select: { role: true },
-      })
-      return { role: membership?.role ?? null }
-    }),
+getMembership: baseProcedure
+  .input(z.object({ clubId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const { clubId } = input;
+
+    const membership = await prisma.membership.findUnique({
+      where: { userId_clubId: { userId: ctx.userId, clubId } },
+      select: { role: true, status: true },
+    });
+
+    return {
+      role: membership?.role ?? null,
+      status: membership?.status ?? null, 
+    };
+  }),
 
   getForumPosts: baseProcedure
     .input(z.object({ 
@@ -243,7 +284,7 @@ export const clubsRouter = createTRPCRouter({
         search: z.string().optional(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const { page, limit, search } = input;
       const skip = (page - 1) * limit;
 
@@ -260,29 +301,31 @@ export const clubsRouter = createTRPCRouter({
           }
         : {};
 
-      const [clubs, totalCount] = await Promise.all([
-        prisma.club.findMany({
-          where,
-          take: limit,
-          skip: skip,
-          include: {
-            _count: {
-              select: {
-                memberships: true,
-              },
-            },
-          },
-          orderBy: {
-            title: 'asc',
-          },
-        }),
-        prisma.club.count({ where }),
-      ]);
+const [clubs, totalCount] = await Promise.all([
+  prisma.club.findMany({
+    where,
+    take: limit,
+    skip,
+    include: {
+      _count: { select: { memberships: true } },
+      memberships: {
+        where: { userId: ctx.userId },
+        select: { status: true },
+      },
+    },
+    orderBy: { title: "asc" },
+  }),
+  prisma.club.count({ where }),
+]);
 
-      return {
-        clubs,
-        totalCount,
-        totalPages: Math.ceil(totalCount / limit),
-      };
+return {
+  clubs: clubs.map((c) => ({
+    ...c,
+    memberCount: c._count.memberships,
+    myStatus: c.memberships[0]?.status ?? null,
+  })),
+  totalCount,
+  totalPages: Math.ceil(totalCount / limit),
+};
     }),
 })
