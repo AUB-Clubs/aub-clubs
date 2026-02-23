@@ -112,15 +112,15 @@ model Club {
 }
 
 model Membership {
-  id        String @id @default(cuid())
-  userId    String
-  clubId    String
-  role      ClubRole   @default(MEMBER) 
-  status    MembershipStatus @default(PENDING)
-  joinedAt  DateTime @default(now())
+  id          String               @id @default(uuid())
+  userId      String               @map("user_id")
+  clubId      String               @map("club_id")
+  role        ClubRole             @default(MEMBER)
+  customTitle String?              @map("custom_title") // e.g., "Logistics Coordinator"
+  status      MembershipStatus     @default(PENDING)
+  joinedAt    DateTime             @default(now()) @map("joined_at")
 
-  @@unique([userId, clubId], name: "userId_clubId")
-
+  // Relations
   user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   club        Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
   auditLogs   MembershipAuditLog[]
