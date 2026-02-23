@@ -92,7 +92,7 @@ export default function ForYouPage() {
     if (inView && feedQuery.hasNextPage) {
       feedQuery.fetchNextPage()
     }
-  }, [inView, feedQuery.hasNextPage])
+  }, [inView, feedQuery])
 
   const items = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
   const isLoading = feedQuery.isLoading
@@ -100,7 +100,7 @@ export default function ForYouPage() {
 
   return (
     <div className="w-full">
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+      <div className="container mx-auto px-4 py-8 sm:px-6">
         {/* Page header */}
         <header className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
