@@ -120,9 +120,7 @@ model Membership {
   joinedAt  DateTime @default(now())
 
   @@unique([userId, clubId], name: "userId_clubId")
-}
 
-  // Relations
   user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   club        Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
   auditLogs   MembershipAuditLog[]
