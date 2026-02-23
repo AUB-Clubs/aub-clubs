@@ -4,6 +4,9 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { trpc } from '@/trpc/client';
 import Link from 'next/link';
 import { AlertCircle, Clock } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { keepPreviousData } from '@tanstack/react-query';
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -18,15 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from '@/components/ui/pagination';
 
 function formatRelativeDate(dateString: string | Date) {
   const date = new Date(dateString);
@@ -45,11 +39,18 @@ export default function RequestsList() {
   const page = Number(searchParams.get('page')) || 1;
   const limit = 10;
 
+  const [pageInput, setPageInput] = useState(page.toString());
+
+  useEffect(() => {
+    setPageInput(page.toString());
+  }, [page]);
+
   const query = trpc.profile.getJoinRequests.useQuery({
     page,
     limit,
   }, {
     refetchInterval: 5000,
+    placeholderData: keepPreviousData,
   });
 
   const isLoading = query.isLoading;
@@ -121,8 +122,8 @@ export default function RequestsList() {
                   requests.map((request) => (
                     <TableRow key={request.id}>
                       <TableCell className="font-medium">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                          <Avatar className="h-10 w-10">
+                        <div className="flex items-center gap-4">
+                          <Avatar>
                             <AvatarImage src={request.club.imageUrl ?? undefined} alt={request.club.title} />
                             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                               {request.club.title.charAt(0).toUpperCase()}
@@ -133,7 +134,7 @@ export default function RequestsList() {
                       </TableCell>
                       <TableCell>{request.club.crn}</TableCell>
                       <TableCell>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
                           <span className="text-sm">{formatRelativeDate(request.joinedAt)}</span>
                         </div>
@@ -178,55 +179,52 @@ export default function RequestsList() {
           </CardContent>
 
           {!isLoading && totalPages > 1 && (
-            <CardFooter className="py-4 border-t">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => handlePageChange(page - 1)}
-                      className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-
-                  {Array.from({ length: totalPages }).map((_, i) => {
-                    const p = i + 1;
-                    if (
-                      p === 1 ||
-                      p === totalPages ||
-                      (p >= page - 1 && p <= page + 1)
-                    ) {
-                      return (
-                        <PaginationItem key={p}>
-                          <PaginationLink
-                            isActive={p === page}
-                            onClick={() => handlePageChange(p)}
-                            className="cursor-pointer"
-                          >
-                            {p}
-                          </PaginationLink>
-                        </PaginationItem>
-                      );
-                    } else if (
-                      p === page - 2 ||
-                      p === page + 2
-                    ) {
-                      return (
-                        <PaginationItem key={p}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      );
+            <CardFooter className="py-4 flex items-center justify-between border-t text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 font-medium">
+                Page
+                <Input
+                  className="h-8 w-14 text-center"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      let newPage = parseInt(pageInput);
+                      if (isNaN(newPage) || newPage < 1) newPage = 1;
+                      if (newPage > totalPages) newPage = totalPages;
+                      setPageInput(newPage.toString());
+                      handlePageChange(newPage);
                     }
-                    return null;
-                  })}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => handlePageChange(page + 1)}
-                      className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+                  }}
+                  onBlur={() => {
+                    let newPage = parseInt(pageInput);
+                    if (isNaN(newPage) || newPage < 1) newPage = 1;
+                    if (newPage > totalPages) newPage = totalPages;
+                    setPageInput(newPage.toString());
+                    if (newPage !== page) {
+                      handlePageChange(newPage);
+                    }
+                  }}
+                />
+                of {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => handlePageChange(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => handlePageChange(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
             </CardFooter>
           )}
         </Card>
