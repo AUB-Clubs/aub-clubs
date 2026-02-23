@@ -1,4 +1,14 @@
 'use client'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 
 import { useState, useEffect } from 'react'
 import { trpc } from '@/trpc/client'
@@ -193,6 +203,15 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       setPostForm({ title: '', content: '', type: 'GENERAL' })
     },
   })
+  const [joinConfirmOpen, setJoinConfirmOpen] = useState(false)
+
+const requestJoinMutation = trpc.clubs.requestJoin.useMutation({
+  onSuccess: async () => {
+    if (!clubId) return
+    await utils.clubs.getMembership.invalidate({ clubId })
+    await utils.clubs.getStats.invalidate({ clubId }) // optional (if you want to refresh member count)
+  },
+})
 
   const toggleUpvoteMutation = trpc.clubs.toggleUpvote.useMutation({
     onMutate: async ({ postId }) => {
@@ -285,6 +304,12 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
   const club = overview.data?.club
   const stats = statsQuery.data
   const role = membershipQuery.data?.role
+  const membershipStatus = membershipQuery.data?.status as
+  | null
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | undefined
   const canPostAnnouncement =
     role === 'PRESIDENT' || role === 'VICE_PRESIDENT'
   const members = membersQuery.data ?? []
@@ -390,17 +415,50 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
               </div>
             </div>
             
-            {isLoading || isMembershipLoading ? (
-              <Skeleton className="h-6 w-24 rounded-full" />
-            ) : role ? (
-              <Badge variant="secondary" className="w-fit text-sm font-medium">
-                {roleLabels[role] ?? role}
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="w-fit text-sm font-medium text-muted-foreground">
-                Not a member
-              </Badge>
-            )}
+{isLoading || isMembershipLoading ? (
+  <Skeleton className="h-6 w-24 rounded-full" />
+) : membershipStatus === 'ACCEPTED' ? (
+  <Badge variant="secondary" className="w-fit text-sm font-medium">
+    Member
+  </Badge>
+) : membershipStatus === 'PENDING' ? (
+  <Badge variant="secondary" className="w-fit text-sm font-medium">
+    Pending
+  </Badge>
+) : (
+  <>
+    <Button
+      size="sm"
+      disabled={requestJoinMutation.isPending}
+      onClick={() => setJoinConfirmOpen(true)}
+    >
+      Join
+    </Button>
+
+    <AlertDialog open={joinConfirmOpen} onOpenChange={setJoinConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Join this club?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to join this club? Your request will be sent for approval.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (!clubId) return
+              requestJoinMutation.mutate({ clubId })
+            }}
+          >
+            Yes, send request
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
+)}
           </div>
         </header>
 

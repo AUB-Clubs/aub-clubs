@@ -5,6 +5,20 @@ import { trpc } from '@/trpc/client';
 import Link from 'next/link';
 import { Users, AlertCircle } from 'lucide-react';
 
+import { useState } from "react";
+
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+
 import {
   Table,
   TableBody,
@@ -51,6 +65,15 @@ export default function ClubList() {
   }, {
     enabled: !!profile // Wait for profile
   });
+  const utils = trpc.useUtils();
+
+const [confirmClubId, setConfirmClubId] = useState<string | null>(null);
+
+const requestJoin = trpc.clubs.requestJoin.useMutation({
+  onSuccess: async () => {
+    await utils.clubs.getClubsList.invalidate({ page, limit, search: searchParam });
+  },
+});
   
   const isLoading = query.isLoading;
   const error = query.error;
@@ -162,10 +185,53 @@ export default function ClubList() {
                         </p>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Users className="h-4 w-4" />
-                          <span>{club._count?.memberships ?? 0}</span>
-                        </div>
+  {(() => {
+
+    const memberCount = club.memberCount ?? club._count?.memberships ?? 0;
+    const status = club.myStatus as null | "PENDING" | "ACCEPTED" | "REJECTED";
+
+
+    if (status === "ACCEPTED") {
+      return (
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Users className="h-4 w-4" />
+          <span>{memberCount}</span>
+        </div>
+      );
+    }
+
+    if (status === "PENDING") {
+      return (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>{memberCount}</span>
+          </div>
+          <Button size="sm" variant="secondary" disabled>
+            Pending
+          </Button>
+        </div>
+      );
+    }
+
+
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Users className="h-4 w-4" />
+          <span>{memberCount}</span>
+        </div>
+
+        <Button
+          size="sm"
+          disabled={requestJoin.isPending}
+          onClick={() => setConfirmClubId(club.id)}
+        >
+          Join
+        </Button>
+                       </div>
+                      );
+                      })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-center gap-2">
@@ -247,6 +313,29 @@ export default function ClubList() {
           )}
         </Card>
       )}
+      <AlertDialog open={!!confirmClubId} onOpenChange={(open) => !open && setConfirmClubId(null)}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Join this club?</AlertDialogTitle>
+      <AlertDialogDescription>
+        Are you sure you want to join this club? Your request will be sent for approval.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction
+        onClick={() => {
+          if (!confirmClubId) return;
+          requestJoin.mutate({ clubId: confirmClubId });
+          setConfirmClubId(null);
+        }}
+      >
+        Yes, send request
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
     </div>
   );
 }
