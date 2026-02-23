@@ -9,7 +9,6 @@ import { useState } from "react";
 
 import {
   AlertDialog,
-  AlertDialogTrigger,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -50,35 +49,36 @@ export default function ClubList() {
   // Get state from URL or defaults
   const page = Number(searchParams.get('page')) || 1;
   const searchParam = searchParams.get('search') || '';
-  
+
   const limit = 10;
 
   // Prioritize profile fetch (usually already started by Sidebar)
   const { data: profile } = trpc.profile.get.useQuery(undefined, {
-      staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
   })
 
-  const query = trpc.clubs.getClubsList.useQuery({ 
-    page, 
+  const query = trpc.clubs.getClubsList.useQuery({
+    page,
     limit,
-    search: searchParam 
+    search: searchParam
   }, {
-    enabled: !!profile // Wait for profile
+    enabled: !!profile, // Wait for profile
+    refetchInterval: 5000 // Poll every 5 seconds
   });
   const utils = trpc.useUtils();
 
-const [confirmClubId, setConfirmClubId] = useState<string | null>(null);
+  const [confirmClubId, setConfirmClubId] = useState<string | null>(null);
 
-const requestJoin = trpc.clubs.requestJoin.useMutation({
-  onSuccess: async () => {
-    await utils.clubs.getClubsList.invalidate({ page, limit, search: searchParam });
-  },
-});
-  
+  const requestJoin = trpc.clubs.requestJoin.useMutation({
+    onSuccess: async () => {
+      await utils.clubs.getClubsList.invalidate({ page, limit, search: searchParam });
+    },
+  });
+
   const isLoading = query.isLoading;
   const error = query.error;
 
-  const data = query.data; 
+  const data = query.data;
   const clubs = data?.clubs ?? [];
   const totalPages = data?.totalPages ?? 0;
 
@@ -102,10 +102,10 @@ const requestJoin = trpc.clubs.requestJoin.useMutation({
       {/* Header Section */}
       <div className="mb-8 space-y-4">
         <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold tracking-tight">Available Clubs</h1>
-            <div className="text-muted-foreground text-sm h-5">
-                 {searchParam && `Results for "${searchParam}"`}
-            </div>
+          <h1 className="text-3xl font-bold tracking-tight">Available Clubs</h1>
+          <div className="text-muted-foreground text-sm h-5">
+            {searchParam && `Results for "${searchParam}"`}
+          </div>
         </div>
       </div>
 
@@ -185,53 +185,53 @@ const requestJoin = trpc.clubs.requestJoin.useMutation({
                         </p>
                       </TableCell>
                       <TableCell>
-  {(() => {
+                        {(() => {
 
-    const memberCount = club.memberCount ?? club._count?.memberships ?? 0;
-    const status = club.myStatus as null | "PENDING" | "ACCEPTED" | "REJECTED";
-
-
-    if (status === "ACCEPTED") {
-      return (
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Users className="h-4 w-4" />
-          <span>{memberCount}</span>
-        </div>
-      );
-    }
-
-    if (status === "PENDING") {
-      return (
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Users className="h-4 w-4" />
-            <span>{memberCount}</span>
-          </div>
-          <Button size="sm" variant="secondary" disabled>
-            Pending
-          </Button>
-        </div>
-      );
-    }
+                          const memberCount = club.memberCount ?? club._count?.memberships ?? 0;
+                          const status = club.myStatus as null | "PENDING" | "ACCEPTED" | "REJECTED";
 
 
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Users className="h-4 w-4" />
-          <span>{memberCount}</span>
-        </div>
+                          if (status === "ACCEPTED") {
+                            return (
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Users className="h-4 w-4" />
+                                <span>{memberCount}</span>
+                              </div>
+                            );
+                          }
 
-        <Button
-          size="sm"
-          disabled={requestJoin.isPending}
-          onClick={() => setConfirmClubId(club.id)}
-        >
-          Join
-        </Button>
-                       </div>
-                      );
-                      })()}
+                          if (status === "PENDING") {
+                            return (
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <Users className="h-4 w-4" />
+                                  <span>{memberCount}</span>
+                                </div>
+                                <Button size="sm" variant="secondary" disabled>
+                                  Pending
+                                </Button>
+                              </div>
+                            );
+                          }
+
+
+                          return (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Users className="h-4 w-4" />
+                                <span>{memberCount}</span>
+                              </div>
+
+                              <Button
+                                size="sm"
+                                disabled={requestJoin.isPending}
+                                onClick={() => setConfirmClubId(club.id)}
+                              >
+                                Join
+                              </Button>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-center gap-2">
@@ -255,7 +255,7 @@ const requestJoin = trpc.clubs.requestJoin.useMutation({
               </TableBody>
             </Table>
           </CardContent>
-          
+
           {/* Pagination Footer - show only if we have data or are loading (maybe skeleton here too?) */}
           {/* For now, hiding pagination while hard loading is fine as long as the card doesn't jump */}
           {!isLoading && totalPages > 1 && (
@@ -263,24 +263,24 @@ const requestJoin = trpc.clubs.requestJoin.useMutation({
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
-                    <PaginationPrevious 
+                    <PaginationPrevious
                       onClick={() => handlePageChange(page - 1)}
                       className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                     />
                   </PaginationItem>
-                  
+
                   {Array.from({ length: totalPages }).map((_, i) => {
                     const p = i + 1;
                     // Show first, last, current, and neighbors
                     if (
-                      p === 1 || 
-                      p === totalPages || 
+                      p === 1 ||
+                      p === totalPages ||
                       (p >= page - 1 && p <= page + 1)
                     ) {
-                       return (
+                      return (
                         <PaginationItem key={p}>
-                          <PaginationLink 
-                            isActive={p === page} 
+                          <PaginationLink
+                            isActive={p === page}
                             onClick={() => handlePageChange(p)}
                             className="cursor-pointer"
                           >
@@ -289,20 +289,20 @@ const requestJoin = trpc.clubs.requestJoin.useMutation({
                         </PaginationItem>
                       );
                     } else if (
-                      p === page - 2 || 
+                      p === page - 2 ||
                       p === page + 2
                     ) {
                       return (
-                         <PaginationItem key={p}>
-                           <PaginationEllipsis />
-                         </PaginationItem>
+                        <PaginationItem key={p}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
                       );
                     }
                     return null;
                   })}
 
                   <PaginationItem>
-                    <PaginationNext 
+                    <PaginationNext
                       onClick={() => handlePageChange(page + 1)}
                       className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                     />
@@ -314,28 +314,28 @@ const requestJoin = trpc.clubs.requestJoin.useMutation({
         </Card>
       )}
       <AlertDialog open={!!confirmClubId} onOpenChange={(open) => !open && setConfirmClubId(null)}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Join this club?</AlertDialogTitle>
-      <AlertDialogDescription>
-        Are you sure you want to join this club? Your request will be sent for approval.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Join this club?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to join this club? Your request will be sent for approval.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
-    <AlertDialogFooter>
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction
-        onClick={() => {
-          if (!confirmClubId) return;
-          requestJoin.mutate({ clubId: confirmClubId });
-          setConfirmClubId(null);
-        }}
-      >
-        Yes, send request
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!confirmClubId) return;
+                requestJoin.mutate({ clubId: confirmClubId });
+                setConfirmClubId(null);
+              }}
+            >
+              Yes, send request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
