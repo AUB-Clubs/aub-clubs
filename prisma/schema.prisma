@@ -206,6 +206,3 @@ model Upvote {
   
   @@map("upvotes")
 }
-
-
-
