@@ -3,57 +3,72 @@ import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
 
+const ClubTypeEnum = z.enum([
+  "ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",
+  "SPORTS", "SOCIAL", "TECHNOLOGY", "COMMUNITY_SERVICE", "ENVIRONMENTAL",
+  "HEALTH_WELLNESS", "RELIGIOUS", "BEGINNER_FRIENDLY", "COMPETITIVE", "NETWORKING",
+]);
+
+const CommitmentLevelEnum = z.enum(["HIGH", "MEDIUM", "LOW"]);
+
+function computeCommitmentLevel(latestAnnouncementDate: Date | null): "HIGH" | "MEDIUM" | "LOW" {
+  if (!latestAnnouncementDate) return "LOW";
+  const diffMs = Date.now() - latestAnnouncementDate.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  if (diffDays <= 10) return "HIGH";
+  if (diffDays <= 30) return "MEDIUM";
+  return "LOW";
+}
+
 export const clubsRouter = createTRPCRouter({
-requestJoin: baseProcedure
-  .input(z.object({ clubId: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    const { clubId } = input;
-    const userId = ctx.userId;
+  requestJoin: baseProcedure
+    .input(z.object({ clubId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { clubId } = input;
+      const userId = ctx.userId;
 
-    const existing = await prisma.membership.findUnique({
-      where: { userId_clubId: { userId, clubId } },
-      select: { id: true, status: true },
-    });
-
-
-    if (existing?.status === "ACCEPTED") return { ok: true, status: "ACCEPTED" as const };
-    if (existing?.status === "PENDING") return { ok: true, status: "PENDING" as const };
-
-
-    if (existing?.status === "REJECTED") {
-      await prisma.membership.update({
+      const existing = await prisma.membership.findUnique({
         where: { userId_clubId: { userId, clubId } },
-        data: { status: "PENDING" },
+        select: { id: true, status: true },
       });
+
+      if (existing?.status === "ACCEPTED") return { ok: true, status: "ACCEPTED" as const };
+      if (existing?.status === "PENDING") return { ok: true, status: "PENDING" as const };
+
+      if (existing?.status === "REJECTED") {
+        await prisma.membership.update({
+          where: { userId_clubId: { userId, clubId } },
+          data: { status: "PENDING" },
+        });
+        return { ok: true, status: "PENDING" as const };
+      }
+
+      await prisma.membership.create({
+        data: {
+          userId,
+          clubId,
+          role: "MEMBER",
+          status: "PENDING",
+        },
+      });
+
       return { ok: true, status: "PENDING" as const };
-    }
-
-    await prisma.membership.create({
-      data: {
-        userId,
-        clubId,
-        role: "MEMBER",
-        status: "PENDING",
-      },
-    });
-
-    return { ok: true, status: "PENDING" as const };
-  }),
+    }),
 
   getOverview: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
-      
+
       const club = await prisma.club.findUnique({
         where: { id: clubId },
         select: { id: true, title: true, description: true, imageUrl: true, bannerUrl: true, types: true, _count: { select: { memberships: true } } },
       })
-      
+
       if (!club) {
         throw new TRPCError({
-           code: "NOT_FOUND",
-           message: "Club not found",
+          code: "NOT_FOUND",
+          message: "Club not found",
         })
       }
 
@@ -73,32 +88,32 @@ requestJoin: baseProcedure
       ])
       return { members: membersCount, postsThisWeek }
     }),
-  
-getMembership: baseProcedure
-  .input(z.object({ clubId: z.string() }))
-  .query(async ({ ctx, input }) => {
-    const { clubId } = input;
 
-    const membership = await prisma.membership.findUnique({
-      where: { userId_clubId: { userId: ctx.userId, clubId } },
-      select: { role: true, status: true },
-    });
+  getMembership: baseProcedure
+    .input(z.object({ clubId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { clubId } = input;
 
-    return {
-      role: membership?.role ?? null,
-      status: membership?.status ?? null, 
-    };
-  }),
+      const membership = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: ctx.userId, clubId } },
+        select: { role: true, status: true },
+      });
+
+      return {
+        role: membership?.role ?? null,
+        status: membership?.status ?? null,
+      };
+    }),
 
   getForumPosts: baseProcedure
-    .input(z.object({ 
-      clubId: z.string(), 
+    .input(z.object({
+      clubId: z.string(),
       limit: z.number().min(1).max(50).default(20),
       cursor: z.string().nullish(),
     }))
     .query(async ({ ctx, input }) => {
       const { clubId, limit, cursor } = input
-      
+
       const posts = await prisma.post.findMany({
         where: { clubId },
         orderBy: { createdAt: "desc" },
@@ -147,9 +162,9 @@ getMembership: baseProcedure
 
   getMembers: baseProcedure
     .input(z.object({ clubId: z.string(), limit: z.number().min(1).max(100).default(50) }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       const { clubId, limit } = input
-      
+
       const memberships = await prisma.membership.findMany({
         where: { clubId },
         orderBy: [{ role: "desc" }, { joinedAt: "asc" }],
@@ -169,8 +184,8 @@ getMembership: baseProcedure
     }),
 
   getAnnouncements: baseProcedure
-    .input(z.object({ 
-      clubId: z.string(), 
+    .input(z.object({
+      clubId: z.string(),
       limit: z.number().min(1).max(50).default(20),
       cursor: z.string().nullish(),
     }))
@@ -276,31 +291,32 @@ getMembership: baseProcedure
       })
       return { id: post.id, title: post.title, content: post.content, type: post.type, createdAt: post.createdAt.toISOString() }
     }),
+
   getClubsList: baseProcedure
     .input(
       z.object({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(10),
         search: z.string().optional(),
-        type: z.enum(["ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",  "SPORTS", "SOCIAL", "TECHNOLOGY", "COMMUNITY_SERVICE", "ENVIRONMENTAL", "HEALTH_WELLNESS", "RELIGIOUS", "BEGINNER_FRIENDLY", "COMPETITIVE", "NETWORKING"]).optional(),
+        types: z.array(ClubTypeEnum).optional(),
+        commitmentLevel: z.array(CommitmentLevelEnum).optional(),
+        sort: z.enum(["name-az", "name-za", "members-desc", "members-asc", "commitment-hl", "commitment-lh"]).optional().default("name-az"),
       })
-
     )
-<<<<<<< HEAD
-    .query(async ({ input }) => {
-      const { page, limit, search, type } = input;
-=======
     .query(async ({ ctx, input }) => {
-      const { page, limit, search } = input;
->>>>>>> staging
+      const { page, limit, search, types, commitmentLevel, sort } = input;
       const skip = (page - 1) * limit;
 
-      const parsedCrn = search ? parseInt(search) : NaN;
-      const isNumber = !isNaN(parsedCrn);
+      // Determine Prisma orderBy from sort option
+      let orderBy: Record<string, unknown> = { title: "asc" };
+      if (sort === "name-za") orderBy = { title: "desc" };
+      else if (sort === "members-desc" || sort === "members-asc") {
+        orderBy = { memberships: { _count: sort === "members-desc" ? "desc" : "asc" } };
+      }
+      // commitment sorting is handled client-side (computed value)
 
-      const where: any = {};
+      const where: Record<string, unknown> = {};
 
-<<<<<<< HEAD
       if (search) {
         const parsedCrn = parseInt(search);
         const isNumber = !isNaN(parsedCrn);
@@ -312,60 +328,87 @@ getMembership: baseProcedure
         ];
       }
 
-      if (type) {
+      if (types && types.length > 0) {
         where.types = {
-          has: type,
+          hasSome: types,
         };
       }
 
+      // If filtering by commitment level, we need to fetch more clubs and post-filter
+      const needsCommitmentFilter = commitmentLevel && commitmentLevel.length > 0 && commitmentLevel.length < 3;
 
+      if (needsCommitmentFilter) {
+        // Fetch all matching clubs (no pagination yet) so we can filter by commitment
+        const allClubs = await prisma.club.findMany({
+          where,
+          include: {
+            _count: { select: { memberships: true } },
+            memberships: {
+              where: { userId: ctx.userId },
+              select: { status: true },
+            },
+          },
+          orderBy,
+        });
 
-=======
->>>>>>> staging
-const [clubs, totalCount] = await Promise.all([
-  prisma.club.findMany({
-    where,
-    take: limit,
-    skip,
-<<<<<<< HEAD
-    select: {
-      id: true,
-      crn: true,
-      title: true,
-      description: true,
-      imageUrl: true,
-      types: true,
-      _count: {
-        select: {
-          memberships: true,
-        },
-      },
-    },
-    orderBy: {
-      title: 'asc',
-    },
-=======
-    include: {
-      _count: { select: { memberships: true } },
-      memberships: {
-        where: { userId: ctx.userId },
-        select: { status: true },
-      },
-    },
-    orderBy: { title: "asc" },
->>>>>>> staging
-  }),
-  prisma.club.count({ where }),
-]);
+        // For each club, compute commitment level from latest announcement
+        const clubsWithCommitment = await Promise.all(
+          allClubs.map(async (club) => {
+            const latestAnnouncement = await prisma.post.findFirst({
+              where: { clubId: club.id, type: "ANNOUNCEMENT" },
+              orderBy: { createdAt: "desc" },
+              select: { createdAt: true },
+            });
+            const level = computeCommitmentLevel(latestAnnouncement?.createdAt ?? null);
+            return { club, level };
+          })
+        );
 
-return {
-  clubs: clubs.map((c) => ({
-    ...c,
-    memberCount: c._count.memberships,
-    myStatus: c.memberships[0]?.status ?? null,
-  })),
-  totalCount,
-  totalPages: Math.ceil(totalCount / limit),
-};
+        // Filter by commitment level
+        const filtered = clubsWithCommitment.filter(
+          ({ level }) => commitmentLevel!.includes(level)
+        );
+
+        const totalCount = filtered.length;
+        const paged = filtered.slice(skip, skip + limit);
+
+        return {
+          clubs: paged.map(({ club }) => ({
+            ...club,
+            memberCount: club._count.memberships,
+            myStatus: club.memberships[0]?.status ?? null,
+          })),
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+        };
+      }
+
+      // Standard path: no commitment filtering
+      const [clubs, totalCount] = await Promise.all([
+        prisma.club.findMany({
+          where,
+          take: limit,
+          skip,
+          include: {
+            _count: { select: { memberships: true } },
+            memberships: {
+              where: { userId: ctx.userId },
+              select: { status: true },
+            },
+          },
+          orderBy,
+        }),
+        prisma.club.count({ where }),
+      ]);
+
+      return {
+        clubs: clubs.map((c) => ({
+          ...c,
+          memberCount: c._count.memberships,
+          myStatus: c.memberships[0]?.status ?? null,
+        })),
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      };
     }),
 })

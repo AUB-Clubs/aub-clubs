@@ -32,11 +32,11 @@ export const forYouRouter = createTRPCRouter({
       if (clubIds.length === 0) {
         return { items: [], nextCursor: null };
       }
-      
+
       const posts = await prisma.post.findMany({
         where: {
-           clubId: { in: clubIds },
-           ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
+          clubId: { in: clubIds },
+          ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
         },
         orderBy: { createdAt: 'desc' },
         take: limit + 1,
@@ -47,12 +47,12 @@ export const forYouRouter = createTRPCRouter({
             select: { id: true, title: true, crn: true, imageUrl: true },
           },
           author: {
-             select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-             }
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            }
           },
           _count: { select: { upvotes: true } },
           upvotes: { where: { userId: ctx.userId }, select: { id: true } },
@@ -88,7 +88,7 @@ export const forYouRouter = createTRPCRouter({
           has_upvoted: p.upvotes.length > 0,
         },
       }));
-      
+
       // Sort is handled by DB order by
       // Cursor pagination is handled by DB
 
@@ -116,7 +116,7 @@ export const forYouRouter = createTRPCRouter({
           id: true,
           title: true,
           description: true,
-          image_url: true,
+          imageUrl: true,
           _count: {
             select: { memberships: true },
           },
@@ -137,7 +137,7 @@ export const forYouRouter = createTRPCRouter({
           id: club.id,
           title: club.title,
           description: club.description,
-          image_url: club.image_url,
+          image_url: club.imageUrl,
           membersCount: club._count.memberships,
           recentPosts: club.posts.map((p: { id: string; title: string; type: string; createdAt: Date }) => ({
             id: p.id,
