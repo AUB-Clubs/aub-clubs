@@ -1,0 +1,21 @@
+FROM migrate/migrate:v4.17.1
+
+USER root
+
+# Copy existing migrations to a temp location
+COPY ./prisma/migrations /tmp/prisma-migrations
+
+# Create the final migrations directory
+RUN mkdir -p /app/migrations
+
+# Normalize the migration structure:
+# Flatten from `directory/migration.sql` to `directory_name.up.sql`
+RUN for dir in /tmp/prisma-migrations/*; do \
+    if [ -d "$dir" ] && [ -f "$dir/migration.sql" ]; then \
+        dirname=$(basename "$dir"); \
+        cp "$dir/migration.sql" "/app/migrations/${dirname}.up.sql"; \
+    fi \
+done
+
+# Clean up
+RUN rm -rf /tmp/prisma-migrations
