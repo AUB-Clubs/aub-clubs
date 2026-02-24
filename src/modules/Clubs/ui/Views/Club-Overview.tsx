@@ -1,4 +1,14 @@
 'use client'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 
 import { useState, useEffect } from 'react'
 import { trpc } from '@/trpc/client'
@@ -40,8 +50,28 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarDays, FileText, Megaphone, Pencil, ThumbsUp, Users, Heart } from 'lucide-react'
+import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
+  const query = trpc.commitmentLevel.getCommitmentLevel.useQuery({ clubId });
+
+  if (query.isLoading) {
+    return <Skeleton className="h-5 w-16" />;
+  }
+
+  if (!query.data) return null;
+
+  const level = query.data.commitmentLevel;
+
+  if (level === 'HIGH') {
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">High Commitment</Badge>;
+  }
+  if (level === 'MEDIUM') {
+    return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Medium Commitment</Badge>;
+  }
+  return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Low Commitment</Badge>;
+}
 
 function formatRelativeTime(date: Date | string): string {
   const now = new Date()
@@ -156,7 +186,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
   )
   const announcementsQuery = trpc.clubs.getAnnouncements.useInfiniteQuery(
     { clubId: clubId!, limit: 5 },
-    { 
+    {
       enabled: !!clubId && isStatsLoaded,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       refetchInterval: 5000,
@@ -164,7 +194,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
   )
   const forumPostsQuery = trpc.clubs.getForumPosts.useInfiniteQuery(
     { clubId: clubId!, limit: 5 },
-    { 
+    {
       enabled: !!clubId && isStatsLoaded,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       refetchInterval: 5000,
@@ -175,13 +205,13 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
     if (announcementsInView && announcementsQuery.hasNextPage) {
       announcementsQuery.fetchNextPage()
     }
-  }, [announcementsInView, announcementsQuery.hasNextPage])
+  }, [announcementsInView, announcementsQuery])
 
   useEffect(() => {
     if (forumInView && forumPostsQuery.hasNextPage) {
       forumPostsQuery.fetchNextPage()
     }
-  }, [forumInView, forumPostsQuery.hasNextPage])
+  }, [forumInView, forumPostsQuery])
 
   const utils = trpc.useUtils()
   const createPostMutation = trpc.clubs.createPost.useMutation({
@@ -191,6 +221,15 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       utils.clubs.getAnnouncements.invalidate({ clubId })
       setPostDialogOpen(false)
       setPostForm({ title: '', content: '', type: 'GENERAL' })
+    },
+  })
+  const [joinConfirmOpen, setJoinConfirmOpen] = useState(false)
+
+  const requestJoinMutation = trpc.clubs.requestJoin.useMutation({
+    onSuccess: async () => {
+      if (!clubId) return
+      await utils.clubs.getMembership.invalidate({ clubId })
+      await utils.clubs.getStats.invalidate({ clubId }) // optional (if you want to refresh member count)
     },
   })
 
@@ -204,9 +243,10 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       const previousAnnouncements = utils.clubs.getAnnouncements.getInfiniteData({ clubId, limit: 5 })
       const previousForumPosts = utils.clubs.getForumPosts.getInfiniteData({ clubId, limit: 5 })
 
-      const updatePostInPage = (page: any) => ({
+      type PostItem = { id: string; isUpvoted: boolean; upvoteCount: number } & Record<string, unknown>;
+      const updatePostInPage = <T extends { items: PostItem[] }>(page: T): T => ({
         ...page,
-        items: page.items.map((post: any) => {
+        items: page.items.map((post) => {
           if (post.id === postId) {
             return {
               ...post,
@@ -215,7 +255,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
             }
           }
           return post
-        }),
+        }) as T["items"],
       })
 
       utils.clubs.getAnnouncements.setInfiniteData({ clubId, limit: 5 }, (old) => {
@@ -285,10 +325,16 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
   const club = overview.data?.club
   const stats = statsQuery.data
   const role = membershipQuery.data?.role
+  const membershipStatus = membershipQuery.data?.status as
+    | null
+    | 'PENDING'
+    | 'ACCEPTED'
+    | 'REJECTED'
+    | undefined
   const canPostAnnouncement =
     role === 'PRESIDENT' || role === 'VICE_PRESIDENT'
   const members = membersQuery.data ?? []
-  
+
   const announcements = announcementsQuery.data?.pages.flatMap(page => page.items) ?? []
   const forumPosts = forumPostsQuery.data?.pages.flatMap(page => page.items) ?? []
 
@@ -372,11 +418,34 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 {isLoading ? (
                   <Skeleton className="h-8 w-56 sm:h-9 sm:w-80 border-4 border-background/50 shadow-sm" />
                 ) : (
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                    {club?.title}
-                  </h1>
+                  <div className="space-y-2">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                      {club?.title}
+                    </h1>
+
+                    {/* Club Types */}
+                    {!isLoading && club?.types && (club.types as string[])?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {(club.types as string[]).map((type: string) => (
+                          <Badge
+                            key={type}
+                            variant="outline"
+                            className="text-xs font-medium"
+                          >
+                            {type.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {!isLoading && clubId && (
+                      <div className="mt-1">
+                        <CommitmentBadgeOverview clubId={clubId} />
+                      </div>
+                    )}
+                  </div>
+
                 )}
-                
+
                 {isLoading || isStatsLoading ? (
                   <Skeleton className="h-4 w-32" />
                 ) : (
@@ -389,24 +458,69 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 )}
               </div>
             </div>
-            
-            {isLoading || isMembershipLoading ? (
-              <Skeleton className="h-6 w-24 rounded-full" />
-            ) : role ? (
-              <Badge variant="secondary" className="w-fit text-sm font-medium">
-                {roleLabels[role] ?? role}
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="w-fit text-sm font-medium text-muted-foreground">
-                Not a member
-              </Badge>
-            )}
+
+            <div className="flex items-center gap-2">
+              {isLoading || isMembershipLoading ? (
+                <Skeleton className="h-6 w-24 rounded-full" />
+              ) : membershipStatus === 'ACCEPTED' ? (
+                <>
+                  <Badge variant="secondary" className="w-fit text-sm font-medium">
+                    {role ? roleLabels[role] ?? role : 'Member'}
+                  </Badge>
+                  {canPostAnnouncement && (
+                    <Button size="sm" variant="outline" className="gap-1.5" asChild>
+                      <Link href={`/clubs/${clubId}/admin`}>
+                        <Settings className="size-4" />
+                        Admin Panel
+                      </Link>
+                    </Button>
+                  )}
+                </>
+              ) : membershipStatus === 'PENDING' ? (
+                <Badge variant="secondary" className="w-fit text-sm font-medium">
+                  Pending
+                </Badge>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={requestJoinMutation.isPending}
+                    onClick={() => setJoinConfirmOpen(true)}
+                  >
+                    Join
+                  </Button>
+
+                  <AlertDialog open={joinConfirmOpen} onOpenChange={setJoinConfirmOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Join this club?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to join this club? Your request will be sent for approval.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            if (!clubId) return
+                            requestJoinMutation.mutate({ clubId })
+                          }}
+                        >
+                          Yes, send request
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
-        <Tabs 
-          value={activeTab} 
-          onValueChange={setActiveTab} 
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
           className="w-full"
         >
           <TabsList className="mb-6 w-full flex flex-wrap h-auto gap-1 bg-muted p-1">
@@ -681,37 +795,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               required
                             />
                           </div>
-                          {canPostAnnouncement && (
-                            <div className="space-y-2">
-                              <Label>Post type</Label>
-                              <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="post-type"
-                                    checked={postForm.type === 'GENERAL'}
-                                    onChange={() =>
-                                      setPostForm((prev) => ({ ...prev, type: 'GENERAL' }))
-                                    }
-                                    className="rounded-full border-input"
-                                  />
-                                  <span className="text-sm">Discussion</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="post-type"
-                                    checked={postForm.type === 'ANNOUNCEMENT'}
-                                    onChange={() =>
-                                      setPostForm((prev) => ({ ...prev, type: 'ANNOUNCEMENT' }))
-                                    }
-                                    className="rounded-full border-input"
-                                  />
-                                  <span className="text-sm">Announcement</span>
-                                </label>
-                              </div>
-                            </div>
-                          )}
+                          {/* Announcement toggle removed — announcements are managed via Admin Panel */}
                           <DialogFooter className="gap-2 sm:gap-0">
                             <Button
                               type="button"
@@ -796,7 +880,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 </h2>
                               ) : null}
                               {post.content ? (
-                              <p className="line-clamp-3 whitespace-pre-wrap text-xs leading-snug text-muted-foreground">
+                                <p className="line-clamp-3 whitespace-pre-wrap text-xs leading-snug text-muted-foreground">
                                   {post.content}
                                 </p>
                               ) : null}
