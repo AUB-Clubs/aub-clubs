@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import LandingPage from "@/modules/landing-page/LandingPage";
+import LandingPage from "@/modules/Landing-Page/LandingPage";
 
 export const metadata: Metadata = {
   title: "Welcome: AUB Clubs",
@@ -8,6 +8,6 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <LandingPage/>
+    <LandingPage />
   )
 }
