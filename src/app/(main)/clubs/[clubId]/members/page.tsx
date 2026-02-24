@@ -1,4 +1,4 @@
-import MemberManagementDashboard from '@/modules/clubs/ui/views/MemberManagementDashboard'
+import { redirect } from 'next/navigation'
 
 interface PageProps {
   params: Promise<{ clubId: string }>
@@ -6,5 +6,5 @@ interface PageProps {
 
 export default async function ClubMembersPage({ params }: PageProps) {
   const { clubId } = await params
-  return <MemberManagementDashboard clubId={clubId} />
+  redirect(`/clubs/${clubId}/admin`)
 }

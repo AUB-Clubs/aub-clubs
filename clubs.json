@@ -34,7 +34,7 @@
   { "crn": 5057, "title": "Music club", "description": "Welcome to the official page of Music club! Join us to connect, learn, and grow.", "types": [ "ARTS" ] },
   { "crn": 5058, "title": "Palestinian Cultural Club", "description": "Welcome to the official page of Palestinian Cultural Club! Join us to connect, learn, and grow.", "types": [ "CULTURAL" ] },
   { "crn": 5059, "title": "AUB RED Cross Club", "description": "Welcome to the official page of AUB RED Cross Club! Join us to connect, learn, and grow.", "types": [ "HEALTH_WELLNESS" ] },
-  { "crn": 5061, "title": "Lebanes.Armenian Heritage Club", "description": "Welcome to the official page of Lebanes.Armenian Heritage Club! Join us to connect, learn, and grow.", "types": [ "CULTURAL" ] },
+  { "crn": 5061, "title": "Lebanese Armenian Heritage Club", "description": "Welcome to the official page of Lebanes.Armenian Heritage Club! Join us to connect, learn, and grow.", "types": [ "CULTURAL" ] },
   { "crn": 5157, "title": "Film Club", "description": "Welcome to the official page of Film Club! Join us to connect, learn, and grow.", "types": [ "ARTS" ] },
   { "crn": 5068, "title": "Cultural Club of the South", "description": "Welcome to the official page of Cultural Club of the South! Join us to connect, learn, and grow.", "types": [ "CULTURAL" ] },
   { "crn": 5069, "title": "Insight club", "description": "Welcome to the official page of Insight club! Join us to connect, learn, and grow.", "types": [ "SOCIAL" ] },
@@ -94,5 +94,5 @@
   { "crn": 5166, "title": "Science Student Society", "description": "Welcome to the official page of Science Student Society! Join us to connect, learn, and grow.", "types": [ "ACADEMIC" ] },
   { "crn": 5167, "title": "Doctoral Student Society", "description": "Welcome to the official page of Doctoral Student Society! Join us to connect, learn, and grow.", "types": [ "ACADEMIC" ] },
   { "crn": 5168, "title": "Women In Engineering (WIE)", "description": "Welcome to the official page of Women In Engineering (WIE)! Join us to connect, learn, and grow.", "types": [ "ACADEMIC" ] },
-  { "crn": 5171, "title": "Amer.Society of Civil Eng.ASCE", "description": "Welcome to the official page of Amer.Society of Civil Eng.ASCE! Join us to connect, learn, and grow.", "types": [ "ENVIRONMENTAL" ] }
+  { "crn": 5171, "title": "Amer. Society of Civil Eng.ASCE", "description": "Welcome to the official page of Amer.Society of Civil Eng.ASCE! Join us to connect, learn, and grow.", "types": [ "ENVIRONMENTAL" ] }
 ]

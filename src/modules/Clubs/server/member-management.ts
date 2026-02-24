@@ -1,183 +1,322 @@
 import { z } from "zod"
 import { createTRPCRouter, baseProcedure } from "../../../trpc/init"
 import { prisma } from "@/lib/prisma"
+import { TRPCError } from "@trpc/server"
 
-const INACTIVE_DAYS = 30
+// ── helpers ──────────────────────────────────────────────────────────
 
-async function requireClubAdmin(ctx: { userId: string }, clubId: string) {
-  const membership = await prisma.membership.findUnique({
-    where: { userId_clubId: { userId: ctx.userId, clubId } },
-    select: { role: true },
+
+async function getActorMembership(userId: string, clubId: string) {
+  const m = await prisma.membership.findUnique({
+    where: { userId_clubId: { userId, clubId } },
+    select: { role: true, status: true },
   })
-  if (!membership) throw new Error("Not a member of this club")
-  if (membership.role !== "PRESIDENT" && membership.role !== "VICE_PRESIDENT") {
-    throw new Error("Only club admins can manage members")
-  }
+  if (!m || m.status !== "ACCEPTED") return null
+  return m
 }
 
+async function requireClubAdmin(ctx: { userId: string }, clubId: string) {
+  const m = await getActorMembership(ctx.userId, clubId)
+  if (!m) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Not an active member" })
+  }
+  if (m.role !== "PRESIDENT" && m.role !== "VICE_PRESIDENT") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only club admins can manage members" })
+  }
+  return m
+}
+
+// ── router ───────────────────────────────────────────────────────────
+
 export const memberManagementRouter = createTRPCRouter({
-  getDashboard: baseProcedure
-    .input(z.object({ clubId: z.string() }))
+  // ── Members (paginated) ────────────────────────────────────────────
+  getMembers: baseProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(50).default(10),
+      })
+    )
     .query(async ({ ctx, input }) => {
       await requireClubAdmin(ctx, input.clubId)
-      const { clubId } = input
+      const { clubId, page, limit } = input
+      const skip = (page - 1) * limit
 
-      const [memberships, pendingRequests, clubPosts, clubUpvotes] = await Promise.all([
+      const [members, totalCount] = await Promise.all([
         prisma.membership.findMany({
-          where: { clubId },
+          where: { clubId, status: "ACCEPTED" },
           orderBy: [{ role: "desc" }, { joinedAt: "asc" }],
-          include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+          skip,
+          take: limit,
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
         }),
-        prisma.membershipRequest.findMany({
-          where: { clubId, status: "PENDING" },
-          orderBy: { requestedAt: "desc" },
-          include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
-        }),
-        prisma.post.findMany({
-          where: { clubId },
-          select: { authorId: true, createdAt: true },
-        }),
-        prisma.upvote.findMany({
-          where: { post: { clubId } },
-          select: { userId: true, createdAt: true },
-        }),
+        prisma.membership.count({ where: { clubId, status: "ACCEPTED" } }),
       ])
 
-      const cutoff = new Date(Date.now() - INACTIVE_DAYS * 24 * 60 * 60 * 1000)
-      const lastPostByUser = new Map<string, Date>()
-      for (const p of clubPosts) {
-        const d = p.createdAt
-        if (!lastPostByUser.has(p.authorId) || lastPostByUser.get(p.authorId)! < d) {
-          lastPostByUser.set(p.authorId, d)
-        }
-      }
-      const lastUpvoteByUser = new Map<string, Date>()
-      for (const u of clubUpvotes) {
-        const d = u.createdAt
-        if (!lastUpvoteByUser.has(u.userId) || lastUpvoteByUser.get(u.userId)! < d) {
-          lastUpvoteByUser.set(u.userId, d)
-        }
-      }
-
-      const members = memberships.map((m) => {
-        const lastPost = lastPostByUser.get(m.userId)
-        const lastUpvote = lastUpvoteByUser.get(m.userId)
-        const lastActivity =
-          [lastPost, lastUpvote].filter(Boolean).length > 0
-            ? new Date(Math.max((lastPost?.getTime() ?? 0), (lastUpvote?.getTime() ?? 0)))
-            : null
-        const isActive = lastActivity ? lastActivity >= cutoff : false
-        return {
+      return {
+        members: members.map((m) => ({
           id: m.id,
           userId: m.userId,
           role: m.role,
+          customTitle: m.customTitle,
           joinedAt: m.joinedAt.toISOString(),
           firstName: m.user.firstName,
           lastName: m.user.lastName,
           email: m.user.email,
-          lastActivityAt: lastActivity?.toISOString() ?? null,
-          isActive,
-        }
-      })
-
-      return {
-        members,
-        pendingRequests: pendingRequests.map((r) => ({
-          id: r.id,
-          userId: r.userId,
-          firstName: r.user.firstName,
-          lastName: r.user.lastName,
-          email: r.user.email,
-          requestedAt: r.requestedAt.toISOString(),
+          avatarUrl: m.user.avatarUrl,
         })),
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
       }
     }),
 
+  // ── Pending Requests ───────────────────────────────────────────────
+  getPendingRequests: baseProcedure
+    .input(z.object({ clubId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await requireClubAdmin(ctx, input.clubId)
+
+      const pending = await prisma.membership.findMany({
+        where: { clubId: input.clubId, status: "PENDING" },
+        orderBy: { joinedAt: "desc" },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      })
+
+      return pending.map((m) => ({
+        id: m.id,
+        userId: m.userId,
+        firstName: m.user.firstName,
+        lastName: m.user.lastName,
+        email: m.user.email,
+        avatarUrl: m.user.avatarUrl,
+        requestedAt: m.joinedAt.toISOString(),
+      }))
+    }),
+
+  // ── Accept / Reject request ────────────────────────────────────────
   respondToRequest: baseProcedure
     .input(
       z.object({
         clubId: z.string(),
-        requestId: z.string(),
+        membershipId: z.string(),
         action: z.enum(["accept", "reject"]),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await requireClubAdmin(ctx, input.clubId)
 
-      const request = await prisma.membershipRequest.findFirst({
-        where: { id: input.requestId, clubId: input.clubId, status: "PENDING" },
+      const membership = await prisma.membership.findFirst({
+        where: { id: input.membershipId, clubId: input.clubId, status: "PENDING" },
       })
-      if (!request) throw new Error("Request not found or already handled")
-
-      if (input.action === "accept") {
-        await prisma.$transaction([
-          prisma.membership.create({
-            data: { userId: request.userId, clubId: input.clubId, role: "MEMBER" },
-          }),
-          prisma.membershipRequest.update({
-            where: { id: input.requestId },
-            data: { status: "ACCEPTED", respondedAt: new Date(), respondedBy: ctx.userId },
-          }),
-        ])
-      } else {
-        await prisma.membershipRequest.update({
-          where: { id: input.requestId },
-          data: { status: "REJECTED", respondedAt: new Date(), respondedBy: ctx.userId },
-        })
+      if (!membership) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Request not found or already handled" })
       }
+
+      const newStatus = input.action === "accept" ? "ACCEPTED" : "REJECTED"
+
+      await prisma.$transaction([
+        prisma.membership.update({
+          where: { id: input.membershipId },
+          data: { status: newStatus },
+        }),
+        prisma.membershipAuditLog.create({
+          data: {
+            membershipId: input.membershipId,
+            actorId: ctx.userId,
+            action: input.action === "accept" ? "ACCEPTED" : "REJECTED",
+          },
+        }),
+      ])
 
       return { ok: true, action: input.action }
     }),
 
-  removeRequest: baseProcedure
-    .input(z.object({ clubId: z.string(), requestId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
-
-      const request = await prisma.membershipRequest.findFirst({
-        where: { id: input.requestId, clubId: input.clubId, status: "PENDING" },
-      })
-      if (!request) throw new Error("Request not found or already handled")
-
-      await prisma.membershipRequest.delete({ where: { id: input.requestId } })
-      return { ok: true }
-    }),
-
+  // ── Kick member ────────────────────────────────────────────────────
   kickMember: baseProcedure
     .input(z.object({ clubId: z.string(), userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
-      if (ctx.userId === input.userId) throw new Error("You cannot kick yourself")
+      const actor = await requireClubAdmin(ctx, input.clubId)
 
-      const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: input.userId, clubId: input.clubId } },
-      })
-      if (!membership) throw new Error("Member not found")
+      if (ctx.userId === input.userId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot kick yourself" })
+      }
 
-      await prisma.membership.delete({
+      const target = await prisma.membership.findUnique({
         where: { userId_clubId: { userId: input.userId, clubId: input.clubId } },
+        select: { id: true, role: true },
       })
+      if (!target) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" })
+      }
+
+      // Vice President cannot kick President
+      if (actor.role === "VICE_PRESIDENT" && target.role === "PRESIDENT") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Vice Presidents cannot kick the President" })
+      }
+
+      await prisma.$transaction([
+        prisma.membershipAuditLog.create({
+          data: {
+            membershipId: target.id,
+            actorId: ctx.userId,
+            action: "REVOKED",
+          },
+        }),
+        prisma.membership.delete({
+          where: { userId_clubId: { userId: input.userId, clubId: input.clubId } },
+        }),
+      ])
+
       return { ok: true }
     }),
 
-  requestToJoin: baseProcedure
-    .input(z.object({ clubId: z.string() }))
+  // ── Change role ────────────────────────────────────────────────────
+  changeRole: baseProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        userId: z.string(),
+        newRole: z.enum(["MEMBER", "BOARD", "VICE_PRESIDENT", "PRESIDENT"]),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      const existing = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId: input.clubId } },
-      })
-      if (existing) throw new Error("Already a member")
+      const actor = await requireClubAdmin(ctx, input.clubId)
 
-      const pending = await prisma.membershipRequest.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId: input.clubId } },
+      const target = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: input.userId, clubId: input.clubId } },
+        select: { role: true },
       })
-      if (pending && pending.status === "PENDING") throw new Error("Request already pending")
+      if (!target) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" })
+      }
 
-      await prisma.membershipRequest.upsert({
-        where: { userId_clubId: { userId: ctx.userId, clubId: input.clubId } },
-        create: { userId: ctx.userId, clubId: input.clubId, status: "PENDING" },
-        update: { status: "PENDING", respondedAt: null, respondedBy: null },
+      // Only president can change roles
+      if (actor.role !== "PRESIDENT") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the President can change roles" })
+      }
+
+      // Cannot demote yourself below president
+      if (ctx.userId === input.userId && input.newRole !== "PRESIDENT") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot demote yourself" })
+      }
+
+      await prisma.membership.update({
+        where: { userId_clubId: { userId: input.userId, clubId: input.clubId } },
+        data: { role: input.newRole },
       })
-      return { ok: true }
+
+      return { ok: true, newRole: input.newRole }
+    }),
+
+  // ── Admin announcements (all statuses) ─────────────────────────────
+  getAdminAnnouncements: baseProcedure
+    .input(z.object({ clubId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await requireClubAdmin(ctx, input.clubId)
+
+      const posts = await prisma.post.findMany({
+        where: { clubId: input.clubId, type: "ANNOUNCEMENT" },
+        orderBy: { createdAt: "desc" },
+        include: {
+          author: { select: { id: true, firstName: true, lastName: true } },
+        },
+      })
+
+      return posts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        status: p.status,
+        audience: p.audience,
+        createdAt: p.createdAt.toISOString(),
+        author: `${p.author.firstName} ${p.author.lastName}`,
+        authorId: p.authorId,
+      }))
+    }),
+
+  // ── Create announcement (always DRAFT) ─────────────────────────────
+  createAnnouncement: baseProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        title: z.string().min(1).max(500),
+        content: z.string().min(1).max(10000),
+        audience: z.enum(["PUBLIC", "MEMBERS_ONLY", "BOARD_ONLY"]).default("PUBLIC"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireClubAdmin(ctx, input.clubId)
+
+      const post = await prisma.post.create({
+        data: {
+          clubId: input.clubId,
+          authorId: ctx.userId,
+          title: input.title,
+          content: input.content,
+          type: "ANNOUNCEMENT",
+          status: "DRAFT",
+          audience: input.audience,
+        },
+      })
+
+      return {
+        id: post.id,
+        title: post.title,
+        status: post.status,
+        createdAt: post.createdAt.toISOString(),
+      }
+    }),
+
+  // ── Review announcement (approve / reject) ─────────────────────────
+  reviewAnnouncement: baseProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        postId: z.string(),
+        action: z.enum(["approve", "reject"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireClubAdmin(ctx, input.clubId)
+
+      const post = await prisma.post.findFirst({
+        where: { id: input.postId, clubId: input.clubId, type: "ANNOUNCEMENT", status: "DRAFT" },
+      })
+      if (!post) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Draft announcement not found" })
+      }
+
+      if (input.action === "approve") {
+        await prisma.post.update({
+          where: { id: input.postId },
+          data: { status: "PUBLISHED" },
+        })
+      } else {
+        // Reject — delete the draft
+        await prisma.post.delete({ where: { id: input.postId } })
+      }
+
+      return { ok: true, action: input.action }
     }),
 })
