@@ -40,6 +40,8 @@ export function ClubListSkeleton() {
                 <TableRow>
                   <TableHead className="w-[300px]">Club</TableHead>
                   <TableHead>CRN</TableHead>
+                  <TableHead>Types</TableHead>
+                  <TableHead className="max-w-[300px]">Description</TableHead>
                   <TableHead className="max-w-[300px]">Description</TableHead>
                   <TableHead>Members</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
@@ -56,6 +58,12 @@ export function ClubListSkeleton() {
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-4 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          <Skeleton className="h-5 w-16 rounded-full" />
+                          <Skeleton className="h-5 w-20 rounded-full" />
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-2">
@@ -101,10 +109,11 @@ export function ClubOverviewSkeleton() {
                 </div>
                 <div className="mb-4 space-y-2">
                    <Skeleton className="h-8 w-48" />
-                   <div className="flex items-center gap-2">
-                      <Skeleton className="h-5 w-24 rounded-full" />
-                      <Skeleton className="h-5 w-24 rounded-full" />
-                   </div>
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
                 </div>
               </div>
             </div>
