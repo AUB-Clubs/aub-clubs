@@ -11,7 +11,7 @@
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
     "seed": "npx tsx prisma/seed.ts",
-    "studio": "npx prisma studio"
+    "studio": "npx prisma studio" 
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
