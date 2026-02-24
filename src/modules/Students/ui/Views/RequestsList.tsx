@@ -95,7 +95,7 @@ export default function RequestsList() {
                   <TableHead>CRN</TableHead>
                   <TableHead>Requested On</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right"><span className="sr-only">Actions</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -152,7 +152,7 @@ export default function RequestsList() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button asChild variant="outline" size="sm">
+                          <Button asChild variant="default" size="sm">
                             <Link href={`/clubs/${request.club.id}`}>
                               View Club
                             </Link>

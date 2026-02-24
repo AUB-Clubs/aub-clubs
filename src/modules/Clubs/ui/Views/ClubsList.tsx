@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { ClubListSkeletonRow } from '@/modules/Clubs/ui/components/Skeletons';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -354,48 +355,14 @@ export default function ClubList() {
                   <TableHead className="max-w-[300px]">Description</TableHead>
                   <TableHead>Commitment</TableHead>
                   <TableHead>Members</TableHead>
-                  <TableHead className="text-center">Actions</TableHead>
+                  <TableHead className="text-right"><span className="sr-only">Actions</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {!profile || isLoading ? (
                   // Skeleton Rows
                   Array.from({ length: 10 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <div className="flex items-center gap-4">
-                          <Skeleton className="h-10 w-10 rounded-full" />
-                          <Skeleton className="h-4 w-32" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-12" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-16" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-full" />
-                          <Skeleton className="h-4 w-3/4" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-16" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <Skeleton className="h-4 w-4" />
-                          <Skeleton className="h-4 w-8" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-center gap-2">
-                          <Skeleton className="h-8 w-16" />
-                          <Skeleton className="h-8 w-24" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <ClubListSkeletonRow key={i} />
                   ))
                 ) : sortedClubs.length > 0 ? (
                   sortedClubs.map((club) => (
@@ -436,7 +403,7 @@ export default function ClubList() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-center gap-2">
+                        <div className="flex justify-end gap-2">
                           {(() => {
                             const status = club.myStatus as null | "PENDING" | "ACCEPTED" | "REJECTED";
                             if (status === "PENDING") {

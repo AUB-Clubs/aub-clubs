@@ -50,7 +50,7 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart } from 'lucide-react'
+import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
@@ -459,50 +459,62 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
               </div>
             </div>
 
-            {isLoading || isMembershipLoading ? (
-              <Skeleton className="h-6 w-24 rounded-full" />
-            ) : membershipStatus === 'ACCEPTED' ? (
-              <Badge variant="secondary" className="w-fit text-sm font-medium">
-                {role ? roleLabels[role] ?? role : 'Member'}
-              </Badge>
-            ) : membershipStatus === 'PENDING' ? (
-              <Badge variant="secondary" className="w-fit text-sm font-medium">
-                Pending
-              </Badge>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  disabled={requestJoinMutation.isPending}
-                  onClick={() => setJoinConfirmOpen(true)}
-                >
-                  Join
-                </Button>
+            <div className="flex items-center gap-2">
+              {isLoading || isMembershipLoading ? (
+                <Skeleton className="h-6 w-24 rounded-full" />
+              ) : membershipStatus === 'ACCEPTED' ? (
+                <>
+                  <Badge variant="secondary" className="w-fit text-sm font-medium">
+                    {role ? roleLabels[role] ?? role : 'Member'}
+                  </Badge>
+                  {canPostAnnouncement && (
+                    <Button size="sm" variant="outline" className="gap-1.5" asChild>
+                      <Link href={`/clubs/${clubId}/admin`}>
+                        <Settings className="size-4" />
+                        Admin Panel
+                      </Link>
+                    </Button>
+                  )}
+                </>
+              ) : membershipStatus === 'PENDING' ? (
+                <Badge variant="secondary" className="w-fit text-sm font-medium">
+                  Pending
+                </Badge>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={requestJoinMutation.isPending}
+                    onClick={() => setJoinConfirmOpen(true)}
+                  >
+                    Join
+                  </Button>
 
-                <AlertDialog open={joinConfirmOpen} onOpenChange={setJoinConfirmOpen}>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Join this club?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to join this club? Your request will be sent for approval.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
+                  <AlertDialog open={joinConfirmOpen} onOpenChange={setJoinConfirmOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Join this club?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to join this club? Your request will be sent for approval.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
 
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => {
-                          if (!clubId) return
-                          requestJoinMutation.mutate({ clubId })
-                        }}
-                      >
-                        Yes, send request
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </>
-            )}
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            if (!clubId) return
+                            requestJoinMutation.mutate({ clubId })
+                          }}
+                        >
+                          Yes, send request
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -783,37 +795,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               required
                             />
                           </div>
-                          {canPostAnnouncement && (
-                            <div className="space-y-2">
-                              <Label>Post type</Label>
-                              <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="post-type"
-                                    checked={postForm.type === 'GENERAL'}
-                                    onChange={() =>
-                                      setPostForm((prev) => ({ ...prev, type: 'GENERAL' }))
-                                    }
-                                    className="rounded-full border-input"
-                                  />
-                                  <span className="text-sm">Discussion</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="post-type"
-                                    checked={postForm.type === 'ANNOUNCEMENT'}
-                                    onChange={() =>
-                                      setPostForm((prev) => ({ ...prev, type: 'ANNOUNCEMENT' }))
-                                    }
-                                    className="rounded-full border-input"
-                                  />
-                                  <span className="text-sm">Announcement</span>
-                                </label>
-                              </div>
-                            </div>
-                          )}
+                          {/* Announcement toggle removed — announcements are managed via Admin Panel */}
                           <DialogFooter className="gap-2 sm:gap-0">
                             <Button
                               type="button"

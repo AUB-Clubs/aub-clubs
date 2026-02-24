@@ -2,6 +2,7 @@ import { z } from "zod"
 import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
+import { memberManagementRouter } from "./member-management"
 
 const ClubTypeEnum = z.enum([
   "ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",
@@ -21,6 +22,7 @@ function computeCommitmentLevel(latestAnnouncementDate: Date | null): "HIGH" | "
 }
 
 export const clubsRouter = createTRPCRouter({
+  memberManagement: memberManagementRouter,
   requestJoin: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .mutation(async ({ ctx, input }) => {
