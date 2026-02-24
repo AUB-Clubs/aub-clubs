@@ -121,25 +121,40 @@ async function main() {
 
   // --- MEMBERSHIPS ---
   console.log('Generating memberships...');
+
+  // Guarantee: user "0000" (Alice) is PRESIDENT of the first club
+  const demoClub = clubs[0];
+  const demoUser = users[0]; // Alice, id = "0000"
+  await prisma.membership.create({
+    data: {
+      userId: demoUser.id,
+      clubId: demoClub.id,
+      role: ClubRole.PRESIDENT,
+      status: 'ACCEPTED',
+    }
+  });
+  console.log(`Made "${demoUser.firstName}" president of "${demoClub.title}" for demo.`);
+
   // Ensure every club has at least one President and some members
   for (const club of clubs) {
-    // Pick a random user to be president
-    const president = faker.helpers.arrayElement(users);
+    // Skip demo club's president assignment (already done above)
+    if (club.id !== demoClub.id) {
+      const president = faker.helpers.arrayElement(users.filter(u => u.id !== demoUser.id));
 
-    // Check if already member
-    const existingPres = await prisma.membership.findUnique({
-      where: { userId_clubId: { userId: president.id, clubId: club.id } }
-    });
-
-    if (!existingPres) {
-      await prisma.membership.create({
-        data: {
-          userId: president.id,
-          clubId: club.id,
-          role: ClubRole.PRESIDENT,
-          status: 'ACCEPTED',
-        }
+      const existingPres = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: president.id, clubId: club.id } }
       });
+
+      if (!existingPres) {
+        await prisma.membership.create({
+          data: {
+            userId: president.id,
+            clubId: club.id,
+            role: ClubRole.PRESIDENT,
+            status: 'ACCEPTED',
+          }
+        });
+      }
     }
 
     // Add random number of members (5-20)
@@ -147,8 +162,8 @@ async function main() {
     const randomUsers = faker.helpers.arrayElements(users, numberOfMembers);
 
     for (const member of randomUsers) {
-      // Skip if same as president to avoid unique constraint error
-      if (member.id === president.id) continue;
+      // Skip if same as demo president for demo club
+      if (club.id === demoClub.id && member.id === demoUser.id) continue;
 
       const existing = await prisma.membership.findUnique({
         where: { userId_clubId: { userId: member.id, clubId: club.id } }
@@ -159,13 +174,58 @@ async function main() {
           data: {
             userId: member.id,
             clubId: club.id,
-            role: faker.helpers.arrayElement([ClubRole.MEMBER, ClubRole.VICE_PRESIDENT, ClubRole.MEMBER, ClubRole.MEMBER]), // skew towards MEMBER
+            role: faker.helpers.arrayElement([ClubRole.MEMBER, ClubRole.VICE_PRESIDENT, ClubRole.MEMBER, ClubRole.MEMBER]),
             status: 'ACCEPTED',
           }
         });
       }
     }
   }
+
+  // --- DEMO: Pending join requests for Alice's club ---
+  console.log('Creating demo join requests...');
+  const existingDemoMembers = await prisma.membership.findMany({
+    where: { clubId: demoClub.id },
+    select: { userId: true },
+  });
+  const existingMemberIds = new Set(existingDemoMembers.map(m => m.userId));
+  const nonMembers = users.filter(u => !existingMemberIds.has(u.id));
+  const requesters = faker.helpers.arrayElements(nonMembers, Math.min(7, nonMembers.length));
+
+  for (const requester of requesters) {
+    await prisma.membership.create({
+      data: {
+        userId: requester.id,
+        clubId: demoClub.id,
+        status: 'PENDING',
+        role: ClubRole.MEMBER,
+      }
+    });
+  }
+  console.log(`Created ${requesters.length} pending join requests for "${demoClub.title}".`);
+
+  // --- DEMO: Draft announcements for Alice's club ---
+  console.log('Creating demo draft announcements...');
+  const draftAnnouncements = [
+    { title: 'Welcome Week Schedule', content: 'Join us for a series of events during welcome week! We have workshops, meetups, and social gatherings planned.', audience: 'PUBLIC' as const },
+    { title: 'Board Elections Coming Up', content: 'We will be holding elections for board positions next month. Stay tuned for nomination details.', audience: 'MEMBERS_ONLY' as const },
+    { title: 'Budget Meeting Notes', content: 'Internal notes from the last budget planning meeting. Please review before our next session.', audience: 'BOARD_ONLY' as const },
+  ];
+
+  for (const ann of draftAnnouncements) {
+    await prisma.post.create({
+      data: {
+        clubId: demoClub.id,
+        authorId: demoUser.id,
+        title: ann.title,
+        content: ann.content,
+        type: 'ANNOUNCEMENT',
+        status: 'DRAFT',
+        audience: ann.audience,
+      }
+    });
+  }
+  console.log(`Created ${draftAnnouncements.length} draft announcements for "${demoClub.title}".`);
 
 
   // --- 200 POSTS ---
