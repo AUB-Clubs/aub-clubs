@@ -53,6 +53,26 @@ import { Textarea } from '@/components/ui/textarea'
 import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
+  const query = trpc.commitmentLevel.getCommitmentLevel.useQuery({ clubId });
+
+  if (query.isLoading) {
+    return <Skeleton className="h-5 w-16" />;
+  }
+
+  if (!query.data) return null;
+
+  const level = query.data.commitmentLevel;
+
+  if (level === 'HIGH') {
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">High Commitment</Badge>;
+  }
+  if (level === 'MEDIUM') {
+    return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Medium Commitment</Badge>;
+  }
+  return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Low Commitment</Badge>;
+}
+
 function formatRelativeTime(date: Date | string): string {
   const now = new Date()
   const d = typeof date === 'string' ? new Date(date) : date
@@ -398,9 +418,32 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 {isLoading ? (
                   <Skeleton className="h-8 w-56 sm:h-9 sm:w-80 border-4 border-background/50 shadow-sm" />
                 ) : (
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                    {club?.title}
-                  </h1>
+                  <div className="space-y-2">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                      {club?.title}
+                    </h1>
+
+                    {/* Club Types */}
+                    {!isLoading && club?.types && (club.types as string[])?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {(club.types as string[]).map((type: string) => (
+                          <Badge
+                            key={type}
+                            variant="outline"
+                            className="text-xs font-medium"
+                          >
+                            {type.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {!isLoading && clubId && (
+                      <div className="mt-1">
+                        <CommitmentBadgeOverview clubId={clubId} />
+                      </div>
+                    )}
+                  </div>
+
                 )}
 
                 {isLoading || isStatsLoading ? (

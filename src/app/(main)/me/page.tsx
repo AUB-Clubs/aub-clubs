@@ -8,6 +8,6 @@ export const metadata: Metadata = {
 
 export default function MePage() {
   return (
-    <ForYouPage/>
+    <ForYouPage />
   )
 }

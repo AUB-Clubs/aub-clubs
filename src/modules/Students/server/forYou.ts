@@ -32,11 +32,11 @@ export const forYouRouter = createTRPCRouter({
       if (clubIds.length === 0) {
         return { items: [], nextCursor: null };
       }
-      
+
       const posts = await prisma.post.findMany({
         where: {
-           clubId: { in: clubIds },
-           ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
+          clubId: { in: clubIds },
+          ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
         },
         orderBy: { createdAt: 'desc' },
         take: limit + 1,
@@ -47,12 +47,12 @@ export const forYouRouter = createTRPCRouter({
             select: { id: true, title: true, crn: true, imageUrl: true },
           },
           author: {
-             select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-             }
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            }
           },
           _count: { select: { upvotes: true } },
           upvotes: { where: { userId: ctx.userId }, select: { id: true } },
@@ -88,13 +88,64 @@ export const forYouRouter = createTRPCRouter({
           has_upvoted: p.upvotes.length > 0,
         },
       }));
-      
+
       // Sort is handled by DB order by
       // Cursor pagination is handled by DB
 
       return {
         items, // TS will infer the union type from the map
         nextCursor,
+      };
+    }),
+  getRecommendedForYou: baseProcedure
+    .query(async ({ ctx }) => {
+      // Get clubs user is in
+      const userClubs = await prisma.membership.findMany({
+        where: { userId: ctx.userId },
+        select: { clubId: true },
+      });
+      const userClubIds = userClubs.map((m) => m.clubId);
+
+      // Get recommended clubs: NOT in user's clubs, sorted by member count
+      const recommendedClubs = await prisma.club.findMany({
+        where: {
+          id: { notIn: userClubIds },
+        },
+        take: 5,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          _count: {
+            select: { memberships: true },
+          },
+          posts: {
+            where: {
+              createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+            },
+            select: { id: true, title: true, content: true, createdAt: true, type: true },
+            orderBy: { createdAt: 'desc' },
+            take: 2,
+          },
+        },
+        orderBy: { memberships: { _count: 'desc' } },
+      });
+
+      return {
+        clubs: recommendedClubs.map((club) => ({
+          id: club.id,
+          title: club.title,
+          description: club.description,
+          image_url: club.imageUrl,
+          membersCount: club._count.memberships,
+          recentPosts: club.posts.map((p: { id: string; title: string; type: string; createdAt: Date }) => ({
+            id: p.id,
+            title: p.title,
+            type: p.type,
+            createdAt: p.createdAt,
+          })),
+        })),
       };
     }),
 });
