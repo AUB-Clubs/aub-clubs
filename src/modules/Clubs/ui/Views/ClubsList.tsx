@@ -6,6 +6,21 @@ import Link from 'next/link';
 import { Users, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
+import { useState, useEffect } from "react";
+import { keepPreviousData } from '@tanstack/react-query';
+import { Input } from "@/components/ui/input";
+
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+
 import {
   Table,
   TableBody,
@@ -19,6 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+<<<<<<< HEAD
 import { Badge } from '@/components/ui/badge';
 import {
   Pagination,
@@ -29,6 +45,8 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from '@/components/ui/pagination';
+=======
+>>>>>>> staging
 
 type CommitmentLevel = "HIGH" | "MEDIUM" | "LOW";
 
@@ -77,7 +95,16 @@ export default function ClubList() {
   const page        = Number(searchParams.get('page')) || 1;
   const searchParam = searchParams.get('search') || '';
 <<<<<<< HEAD
+<<<<<<< HEAD
   const typeParam = searchParams.get('type') || '';
+=======
+
+  const [pageInput, setPageInput] = useState(page.toString());
+
+  useEffect(() => {
+    setPageInput(page.toString());
+  }, [page]);
+>>>>>>> staging
 
   const limit = 10;
 
@@ -87,12 +114,13 @@ export default function ClubList() {
 
   // Prioritize profile fetch (usually already started by Sidebar)
   const { data: profile } = trpc.profile.get.useQuery(undefined, {
-      staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
   })
 
-  const query = trpc.clubs.getClubsList.useQuery({ 
-    page, 
+  const query = trpc.clubs.getClubsList.useQuery({
+    page,
     limit,
+<<<<<<< HEAD
     search: searchParam,
     type: type as any,
   }, {
@@ -119,6 +147,29 @@ export default function ClubList() {
   const error      = query.error;
   const data       = query.data;
   const clubs      = data?.clubs ?? [];
+=======
+    search: searchParam
+  }, {
+    enabled: !!profile, // Wait for profile
+    refetchInterval: 5000, // Poll every 5 seconds
+    placeholderData: keepPreviousData,
+  });
+  const utils = trpc.useUtils();
+
+  const [confirmClubId, setConfirmClubId] = useState<string | null>(null);
+
+  const requestJoin = trpc.clubs.requestJoin.useMutation({
+    onSuccess: async () => {
+      await utils.clubs.getClubsList.invalidate({ page, limit, search: searchParam });
+    },
+  });
+
+  const isLoading = query.isLoading;
+  const error = query.error;
+
+  const data = query.data;
+  const clubs = data?.clubs ?? [];
+>>>>>>> staging
   const totalPages = data?.totalPages ?? 0;
 
   const commitmentQueries = trpc.useQueries(function (t) {
@@ -160,16 +211,20 @@ export default function ClubList() {
       <div className="mb-8 space-y-4">
         <div className="flex items-center justify-between">
 <<<<<<< HEAD
+<<<<<<< HEAD
             <h1 className="text-3xl font-bold tracking-tight">Available Clubs</h1>
             <div className="text-muted-foreground text-sm h-5">
                  {searchParam && `Results for "${searchParam}"`}
                  {typeParam && ` • Type: ${typeParam}`}
             </div>
 =======
+=======
+>>>>>>> staging
           <h1 className="text-3xl font-bold tracking-tight">Available Clubs</h1>
           <div className="text-muted-foreground text-sm h-5">
             {searchParam && `Results for "${searchParam}"`}
           </div>
+<<<<<<< HEAD
         </div>
 
         <div className="flex items-center gap-3">
@@ -189,6 +244,8 @@ export default function ClubList() {
             Default
           </Button>
 >>>>>>> nb/commitment-level
+=======
+>>>>>>> staging
         </div>
       </div>
 
@@ -215,7 +272,12 @@ export default function ClubList() {
               </TableHeader>
               <TableBody>
                 {!profile || isLoading ? (
+<<<<<<< HEAD
                   Array.from({ length: 5 }).map((_, i) => (
+=======
+                  // Skeleton Rows
+                  Array.from({ length: 10 }).map((_, i) => (
+>>>>>>> staging
                     <TableRow key={i}>
                       <TableCell>
                         <div className="flex items-center gap-4">
@@ -243,7 +305,8 @@ export default function ClubList() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-center gap-2">
-                          <Skeleton className="h-10 w-24" />
+                          <Skeleton className="h-8 w-16" />
+                          <Skeleton className="h-8 w-24" />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -278,12 +341,35 @@ export default function ClubList() {
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Users className="h-4 w-4" />
-                          <span>{club._count?.memberships ?? 0}</span>
+                          <span>{club.memberCount ?? club._count?.memberships ?? 0}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-center gap-2">
-                          <Button asChild variant="default">
+                          {(() => {
+                            const status = club.myStatus as null | "PENDING" | "ACCEPTED" | "REJECTED";
+                            if (status === "PENDING") {
+                              return (
+                                <Button size="sm" variant="secondary" disabled className="w-20">
+                                  Pending
+                                </Button>
+                              );
+                            }
+                            if (status !== "ACCEPTED") {
+                              return (
+                                <Button
+                                  size="sm"
+                                  className="w-20"
+                                  disabled={requestJoin.isPending}
+                                  onClick={() => setConfirmClubId(club.id)}
+                                >
+                                  Join
+                                </Button>
+                              );
+                            }
+                            return null;
+                          })()}
+                          <Button asChild variant="default" size="sm">
                             <Link href={`/clubs/${club.id}`}>
                               View Club
                             </Link>
@@ -346,6 +432,7 @@ export default function ClubList() {
               </TableBody>
             </Table>
           </CardContent>
+<<<<<<< HEAD
 
           {!isLoading && totalPages > 1 && (
             <CardFooter className="py-4">
@@ -390,10 +477,84 @@ export default function ClubList() {
                   </PaginationItem>
                 </PaginationContent>
               </Pagination>
+=======
+
+          {/* Pagination Footer - show only if we have data or are loading */}
+          {totalPages > 1 && (
+            <CardFooter className="py-4 flex items-center justify-between border-t text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 font-medium">
+                Page
+                <Input
+                  className="h-8 w-14 text-center"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      let newPage = parseInt(pageInput);
+                      if (isNaN(newPage) || newPage < 1) newPage = 1;
+                      if (newPage > totalPages) newPage = totalPages;
+                      setPageInput(newPage.toString());
+                      handlePageChange(newPage);
+                    }
+                  }}
+                  onBlur={() => {
+                    let newPage = parseInt(pageInput);
+                    if (isNaN(newPage) || newPage < 1) newPage = 1;
+                    if (newPage > totalPages) newPage = totalPages;
+                    setPageInput(newPage.toString());
+                    if (newPage !== page) {
+                      handlePageChange(newPage);
+                    }
+                  }}
+                />
+                of {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => handlePageChange(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => handlePageChange(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+>>>>>>> staging
             </CardFooter>
           )}
         </Card>
       )}
+      <AlertDialog open={!!confirmClubId} onOpenChange={(open) => !open && setConfirmClubId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Join this club?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to join this club? Your request will be sent for approval.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!confirmClubId) return;
+                requestJoin.mutate({ clubId: confirmClubId });
+                setConfirmClubId(null);
+              }}
+            >
+              Yes, send request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

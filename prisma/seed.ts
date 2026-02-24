@@ -1,7 +1,8 @@
 import { prisma } from '../src/lib/prisma';
 import { ClubRole, PostType } from '../src/generated/prisma/enums';
 import { faker } from '@faker-js/faker';
-import { uuid } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 async function main() {
   console.log('Start seeding ...');
@@ -74,13 +75,13 @@ async function main() {
     const lastName = faker.person.lastName();
     // Ensure unique email and AubnetID
     const email = faker.internet.email({ firstName, lastName, provider: 'aub.edu.lb' });
-    const aubnetId = 20000 + i; 
+    const aubnetId = 20000 + i;
 
     const user = await prisma.user.create({
       data: {
         id: faker.string.uuid(), // Generate a random UUID for Clerk User ID
         aubnetId: aubnetId,
-        email: email, 
+        email: email,
         firstName: firstName,
         lastName: lastName,
         dob: faker.date.birthdate({ min: 18, max: 25, mode: 'age' }),
@@ -95,44 +96,23 @@ async function main() {
   console.log(`Created ${users.length} users.`);
 
 
-  // --- 10 CLUBS ---
+  // --- REAL CLUBS ---
   const clubs = [];
-  console.log('Generating clubs...');
-  
-  // Specific clubs
-  const staticClubsData = [
-    {
-      crn: 12345,
-      title: 'Computer Science Student Society',
-      description: 'The official club for CMPS students at AUB.',
-      imageUrl: 'https://placehold.co/100x100/png',
-      bannerUrl: 'https://placehold.co/1200x300/png',
-    },
-    {
-      crn: 67890,
-      title: 'AUB Robotics Club',
-      description: 'Building the future, one robot at a time.',
-      imageUrl: 'https://placehold.co/100x100/png',
-      bannerUrl: 'https://placehold.co/1200x300/png',
-    }
-  ];
+  console.log('Generating real clubs from clubs.json...');
 
-  for(const clubData of staticClubsData) {
-      const club = await prisma.club.create({ data: clubData });
-      clubs.push(club);
-  }
+  const clubsJsonPath = path.join(__dirname, '../../../clubs.json');
+  const realClubsData = JSON.parse(fs.readFileSync(clubsJsonPath, 'utf8'));
 
-  // Generate 8 more random clubs
-  for (let i = 0; i < 8; i++) {
-    const clubTitle = faker.company.name() + ' Club';
+  for (const clubData of realClubsData) {
     const club = await prisma.club.create({
       data: {
-        crn: 1000 + i, // Simple unique CRN
-        title: clubTitle,
-        description: faker.lorem.paragraph(),
-        imageUrl: faker.image.urlLoremFlickr({ category: 'abstract', width: 100, height: 100 }), // Using placeholders or faker image
-        bannerUrl: faker.image.urlLoremFlickr({ category: 'abstract', width: 1200, height: 300 }),
-      },
+        crn: clubData.crn,
+        title: clubData.title,
+        description: clubData.description,
+        types: clubData.types,
+        imageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(clubData.title)}&background=random`,
+        bannerUrl: 'https://placehold.co/1200x300/png',
+      }
     });
     clubs.push(club);
   }
@@ -143,46 +123,46 @@ async function main() {
   console.log('Generating memberships...');
   // Ensure every club has at least one President and some members
   for (const club of clubs) {
-     // Pick a random user to be president
-     const president = faker.helpers.arrayElement(users);
-     
-     // Check if already member
-     const existingPres = await prisma.membership.findUnique({
-         where: { userId_clubId: { userId: president.id, clubId: club.id } }
-     });
+    // Pick a random user to be president
+    const president = faker.helpers.arrayElement(users);
 
-     if (!existingPres) {
+    // Check if already member
+    const existingPres = await prisma.membership.findUnique({
+      where: { userId_clubId: { userId: president.id, clubId: club.id } }
+    });
+
+    if (!existingPres) {
+      await prisma.membership.create({
+        data: {
+          userId: president.id,
+          clubId: club.id,
+          role: ClubRole.PRESIDENT
+        }
+      });
+    }
+
+    // Add random number of members (5-20)
+    const numberOfMembers = faker.number.int({ min: 5, max: 20 });
+    const randomUsers = faker.helpers.arrayElements(users, numberOfMembers);
+
+    for (const member of randomUsers) {
+      // Skip if same as president to avoid unique constraint error
+      if (member.id === president.id) continue;
+
+      const existing = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: member.id, clubId: club.id } }
+      });
+
+      if (!existing) {
         await prisma.membership.create({
-            data: {
-                userId: president.id,
-                clubId: club.id,
-                role: ClubRole.PRESIDENT
-            }
+          data: {
+            userId: member.id,
+            clubId: club.id,
+            role: faker.helpers.arrayElement([ClubRole.MEMBER, ClubRole.VICE_PRESIDENT, ClubRole.MEMBER, ClubRole.MEMBER]), // skew towards MEMBER
+          }
         });
-     }
-
-     // Add random number of members (5-20)
-     const numberOfMembers = faker.number.int({ min: 5, max: 20 });
-     const randomUsers = faker.helpers.arrayElements(users, numberOfMembers);
-
-     for (const member of randomUsers) {
-         // Skip if same as president to avoid unique constraint error
-         if (member.id === president.id) continue;
-
-         const existing = await prisma.membership.findUnique({
-            where: { userId_clubId: { userId: member.id, clubId: club.id } }
-         });
-
-         if (!existing) {
-             await prisma.membership.create({
-                 data: {
-                     userId: member.id,
-                     clubId: club.id,
-                     role: faker.helpers.arrayElement([ClubRole.MEMBER, ClubRole.VICE_PRESIDENT, ClubRole.MEMBER, ClubRole.MEMBER]), // skew towards MEMBER
-                 }
-             });
-         }
-     }
+      }
+    }
   }
 
 
@@ -190,14 +170,14 @@ async function main() {
   console.log('Generating posts...');
   for (let i = 0; i < 200; i++) {
     const club = faker.helpers.arrayElement(clubs);
-    
+
     // Get members of this club to be the author
     const memberships = await prisma.membership.findMany({
-        where: { clubId: club.id },
-        include: { user: true } // get user details
+      where: { clubId: club.id },
+      include: { user: true } // get user details
     });
 
-    if (memberships.length === 0) continue; 
+    if (memberships.length === 0) continue;
 
     // Important: To generate posts we need an author who is a member.
     // However, if we loop 200 times and do DB queries inside, it might be slow but it's fine for seeding 200 items.
@@ -213,19 +193,19 @@ async function main() {
         createdAt: faker.date.past() // Random date in the past
       },
     });
-    
+
     // Add some random upvotes (0-20)
     const numUpvotes = faker.number.int({ min: 0, max: 20 });
     const randomVoters = faker.helpers.arrayElements(users, numUpvotes);
-    
+
     for (const voter of randomVoters) {
-        
-        await prisma.upvote.create({
-            data: {
-                userId: voter.id,
-                postId: post.id
-            }
-        });
+
+      await prisma.upvote.create({
+        data: {
+          userId: voter.id,
+          postId: post.id
+        }
+      });
     }
   }
   console.log('Created 200 posts with random upvotes.');
