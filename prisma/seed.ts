@@ -136,7 +136,8 @@ async function main() {
         data: {
           userId: president.id,
           clubId: club.id,
-          role: ClubRole.PRESIDENT
+          role: ClubRole.PRESIDENT,
+          status: 'ACCEPTED',
         }
       });
     }
@@ -159,6 +160,7 @@ async function main() {
             userId: member.id,
             clubId: club.id,
             role: faker.helpers.arrayElement([ClubRole.MEMBER, ClubRole.VICE_PRESIDENT, ClubRole.MEMBER, ClubRole.MEMBER]), // skew towards MEMBER
+            status: 'ACCEPTED',
           }
         });
       }
