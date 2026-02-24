@@ -100,7 +100,7 @@ async function main() {
   const clubs = [];
   console.log('Generating real clubs from clubs.json...');
 
-  const clubsJsonPath = path.join(__dirname, '../../../clubs.json');
+  const clubsJsonPath = path.join(process.cwd(), 'clubs.json');
   const realClubsData = JSON.parse(fs.readFileSync(clubsJsonPath, 'utf8'));
 
   for (const clubData of realClubsData) {
