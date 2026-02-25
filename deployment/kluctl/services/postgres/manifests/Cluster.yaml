@@ -8,6 +8,6 @@ spec:
   enableSuperuserAccess: true
   instances: 1
   storage:
-    size: 5Gi
+    size: 2Gi
   superuserSecret:
     name: cnpg-minimal-superuser
