@@ -6,7 +6,7 @@ metadata:
   labels:
     app: next-app
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: next-app
@@ -33,9 +33,9 @@ spec:
               port: 3000
           resources:
             limits:
-              memory: "512Mi"
+              memory: "256Mi"
             requests:
-              memory: "512Mi"
+              memory: "256Mi"
               cpu: "250m"
           securityContext:
             allowPrivilegeEscalation: false
