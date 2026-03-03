@@ -38,9 +38,16 @@ export const clubsRouter = createTRPCRouter({
       if (existing?.status === "PENDING") return { ok: true, status: "PENDING" as const };
 
       if (existing?.status === "REJECTED") {
-        await prisma.membership.update({
+        await prisma.membership.delete({
           where: { userId_clubId: { userId, clubId } },
-          data: { status: "PENDING" },
+        });
+        await prisma.membership.create({
+          data: {
+            userId,
+            clubId,
+            role: "MEMBER",
+            status: "PENDING",
+          },
         });
         return { ok: true, status: "PENDING" as const };
       }

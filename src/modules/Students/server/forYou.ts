@@ -97,55 +97,140 @@ export const forYouRouter = createTRPCRouter({
         nextCursor,
       };
     }),
-  getRecommendedForYou: baseProcedure
-    .query(async ({ ctx }) => {
-      // Get clubs user is in
-      const userClubs = await prisma.membership.findMany({
-        where: { userId: ctx.userId },
-        select: { clubId: true },
-      });
-      const userClubIds = userClubs.map((m) => m.clubId);
+  // getRecommendedForYou: baseProcedure
+  //   .query(async ({ ctx }) => {
+  //     // Get clubs user is in
+  //     const userClubs = await prisma.membership.findMany({
+  //       where: { userId: ctx.userId },
+  //       select: { clubId: true },
+  //     });
+  //     const userClubIds = userClubs.map((m) => m.clubId);
 
-      // Get recommended clubs: NOT in user's clubs, sorted by member count
-      const recommendedClubs = await prisma.club.findMany({
-        where: {
-          id: { notIn: userClubIds },
+  //     // Get recommended clubs: NOT in user's clubs, sorted by member count
+  //     const recommendedClubs = await prisma.club.findMany({
+  //       where: {
+  //         id: { notIn: userClubIds },
+  //       },
+  //       take: 5,
+  //       select: {
+  //         id: true,
+  //         title: true,
+  //         description: true,
+  //         imageUrl: true,
+  //         _count: {
+  //           select: { memberships: true },
+  //         },
+  //         posts: {
+  //           where: {
+  //             createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+  //           },
+  //           select: { id: true, title: true, content: true, createdAt: true, type: true },
+  //           orderBy: { createdAt: 'desc' },
+  //           take: 2,
+  //         },
+  //       },
+  //       orderBy: { memberships: { _count: 'desc' } },
+  //     });
+
+  //     return {
+  //       clubs: recommendedClubs.map((club) => ({
+  //         id: club.id,
+  //         title: club.title,
+  //         description: club.description,
+  //         image_url: club.imageUrl,
+  //         membersCount: club._count.memberships,
+  //         recentPosts: club.posts.map((p: { id: string; title: string; type: string; createdAt: Date }) => ({
+  //           id: p.id,
+  //           title: p.title,
+  //           type: p.type,
+  //           createdAt: p.createdAt,
+  //         })),
+  //       })),
+  //     };
+  //   }),
+   getRecommendedForYou: baseProcedure
+     .query(async ({ ctx }) => {
+
+    // Get user memberships with club types
+    const userMemberships = await prisma.membership.findMany({
+      where: { 
+        userId: ctx.userId,
+        status: "ACCEPTED"
+      },
+      include: {
+        club: {
+          select: { types: true }
+        }
+      }
+    });
+
+    const userClubIds = userMemberships.map(m => m.clubId);
+
+    // Extract user preferred types
+    const preferredTypes = Array.from(
+      new Set(
+        userMemberships.flatMap(m => m.club.types)
+      )
+    );
+
+    // Get candidate clubs (not in user's clubs)
+    const candidateClubs = await prisma.club.findMany({
+      where: {
+        id: { notIn: userClubIds }
+      },
+      include: {
+        _count: {
+          select: { memberships: true }
         },
-        take: 5,
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          imageUrl: true,
-          _count: {
-            select: { memberships: true },
+        posts: {
+          where: {
+            createdAt: {
+              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            }
           },
-          posts: {
-            where: {
-              createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-            },
-            select: { id: true, title: true, content: true, createdAt: true, type: true },
-            orderBy: { createdAt: 'desc' },
-            take: 2,
-          },
-        },
-        orderBy: { memberships: { _count: 'desc' } },
-      });
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            createdAt: true
+          }
+        }
+      }
+    });
+
+    // Compute recommendation score
+    const scoredClubs = candidateClubs.map(club => {
+
+      let score = 0;
+
+      // Content similarity score
+      const matchingTypes = club.types.filter(t => preferredTypes.includes(t));
+      score += matchingTypes.length * 5;
+
+      // Activity score (recent posts)
+      score += club.posts.length * 2;
+
+      // Popularity boost
+      score += club._count.memberships * 0.1;
 
       return {
-        clubs: recommendedClubs.map((club) => ({
-          id: club.id,
-          title: club.title,
-          description: club.description,
-          image_url: club.imageUrl,
-          membersCount: club._count.memberships,
-          recentPosts: club.posts.map((p: { id: string; title: string; type: string; createdAt: Date }) => ({
-            id: p.id,
-            title: p.title,
-            type: p.type,
-            createdAt: p.createdAt,
-          })),
-        })),
+        club,
+        score
       };
-    }),
+    });
+
+    scoredClubs.sort((a, b) => b.score - a.score);
+
+    return {
+      clubs: scoredClubs.slice(0, 5).map(({ club, score }) => ({
+        id: club.id,
+        title: club.title,
+        description: club.description,
+        image_url: club.imageUrl,
+        membersCount: club._count.memberships,
+        recommendationScore: score,
+        recentPosts: club.posts.slice(0, 2)
+      }))
+    };
+  }),
 });
