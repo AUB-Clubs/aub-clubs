@@ -4,12 +4,14 @@ import { profileRouter } from '../../modules/Students/server/profile';
 import { forYouRouter } from '../../modules/Students/server/forYou';
 import { clubsRouter } from '../../modules/Clubs/server/clubs';
 import { commitmentLevelRouter } from '../../modules/Clubs/server/commitmentLevel';
+import { scheduleRouter } from '../../modules/Clubs/server/schedule';
 
 export const appRouter = createTRPCRouter({
   profile:         profileRouter,
   forYou:          forYouRouter,
   clubs:           clubsRouter,
   commitmentLevel: commitmentLevelRouter,
+  schedule: scheduleRouter,
   createUser: baseProcedure
     .input(
       z.object({
