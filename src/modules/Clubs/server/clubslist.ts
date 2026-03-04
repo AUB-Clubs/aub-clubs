@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { baseProcedure, createTRPCRouter } from '../../../trpc/init';
-import { PrismaClient } from '@/generated/prisma';
-const prisma=new PrismaClient();
+import { prisma } from '@/lib/prisma';
+
 
 const ClubSchema=z.object({
     id : z.string(),
