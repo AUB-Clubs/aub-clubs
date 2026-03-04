@@ -69,6 +69,24 @@ function CommitmentBadge({ clubId }: { clubId: string }) {
   return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Low</Badge>;
 }
 
+function ConflictBadge({ clubId, userId }: { clubId: string; userId: string }) {
+  const query = trpc.schedule.getConflicts.useQuery({ clubId, userId });
+
+  if (query.isLoading) {
+    return <Skeleton className="h-5 w-16" />;
+  }
+
+  if (!query.data || query.data.length === 0) {
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">No Conflict</Badge>;
+  }
+
+  return (
+    <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+      {query.data.length} Conflict{query.data.length > 1 ? 's' : ''}
+    </Badge>
+  );
+}
+
 export default function ClubList() {
   const router       = useRouter();
   const pathname     = usePathname();
@@ -178,6 +196,7 @@ export default function ClubList() {
                   <TableHead className="max-w-[300px]">Description</TableHead>
                   <TableHead>Members</TableHead>
                   <TableHead>Commitment</TableHead>
+                  <TableHead>Schedule</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -205,6 +224,9 @@ export default function ClubList() {
                           <Skeleton className="h-4 w-4" />
                           <Skeleton className="h-4 w-8" />
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16" />
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-16" />
@@ -247,6 +269,11 @@ export default function ClubList() {
                           <CommitmentBadge clubId={club.id} />
                         </TableCell>
                         <TableCell>
+                          {profile?.id && (
+                            <ConflictBadge clubId={club.id} userId={profile.id} />
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <div className="flex justify-center gap-2">
                             <Button asChild variant="default">
                               <Link href={`/clubs/${club.id}`}>
@@ -260,7 +287,7 @@ export default function ClubList() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       No clubs found
                     </TableCell>
                   </TableRow>
