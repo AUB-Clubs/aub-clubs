@@ -116,58 +116,88 @@ export default function ForYouPage() {
           </p>
         </header>
 
-        {/* Recommended Section */}
+        {/* Recommended Clubs */}
         {recommendedQuery.data?.clubs && recommendedQuery.data.clubs.length > 0 && (
           <section className="mb-10">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Recommended for You</h2>
-              <Badge variant="secondary" className="text-xs">
-                Suggestions
-              </Badge>
-            </div>
+            <h2 className="text-xl font-semibold mb-4">
+              Recommended Clubs
+            </h2>
 
             <div className="grid gap-4 sm:grid-cols-2">
               {recommendedQuery.data.clubs.map((club) => (
-                <Card key={club.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-10">
-                        {club.image_url ? (
-                          <AvatarImage src={club.image_url} alt={club.title} />
-                        ) : null}
-                        <AvatarFallback>
-                          {club.title.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{club.title}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Users className="size-3" />
-                          {club.membersCount} members
-                        </div>
-                      </div>
-                    </div>
+                <Card key={club.id}>
+                  <CardHeader>
+                    <p className="font-medium">{club.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {club.membersCount} members
+                    </p>
                   </CardHeader>
 
-                  <CardContent className="text-sm text-muted-foreground line-clamp-2">
+                  <CardContent className="text-sm text-muted-foreground">
                     {club.description}
                   </CardContent>
 
-                  <CardFooter className="flex justify-between items-center">
-                    <div className="flex gap-1 flex-wrap">
-                      {club.recentPosts.slice(0, 1).map((post) => (
-                        <Badge key={post.id} variant="outline" className="text-xs">
-                          {post.type === "ANNOUNCEMENT" ? "Recent Announcement" : "Active Club"}
-                        </Badge>
-                      ))}
-                    </div>
-
+                  <CardFooter>
                     <Button asChild size="sm">
                       <Link href={`/clubs/${club.id}`}>
-                        View
+                        View Club
                       </Link>
                     </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Discover Posts */}
+        {recommendedQuery.data?.posts && recommendedQuery.data.posts.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-xl font-semibold mb-4">
+              Discover Posts From Other Clubs
+            </h2>
+
+            <div className="space-y-4">
+              {recommendedQuery.data.posts.map((post) => (
+                <Card key={post.id}>
+                  <CardHeader>
+                    <Link
+                      href={`/clubs/${post.club.id}`}
+                      className="flex items-center gap-2"
+                    >
+                      <Avatar className="size-8">
+                        {post.club.imageUrl && (
+                          <AvatarImage src={post.club.imageUrl} />
+                        )}
+                        <AvatarFallback>
+                          {post.club.title.slice(0,2)}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div>
+                        <p className="text-sm font-medium">
+                          {post.club.title}
+                        </p>
+
+                        <p className="text-xs text-muted-foreground">
+                          {post.author.firstName} {post.author.lastName}
+                        </p>
+                      </div>
+                    </Link>
+                  </CardHeader>
+
+                  <CardContent>
+                    {post.title && (
+                      <p className="font-medium">{post.title}</p>
+                    )}
+
+                    <p className="text-sm text-muted-foreground">
+                      {post.content}
+                    </p>
+                  </CardContent>
+
+                  <CardFooter className="text-xs text-muted-foreground">
+                    {post.upvotes_count} upvotes
                   </CardFooter>
                 </Card>
               ))}

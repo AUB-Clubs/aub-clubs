@@ -148,89 +148,198 @@ export const forYouRouter = createTRPCRouter({
   //       })),
   //     };
   //   }),
-   getRecommendedForYou: baseProcedure
-     .query(async ({ ctx }) => {
 
-    // Get user memberships with club types
-    const userMemberships = await prisma.membership.findMany({
-      where: { 
-        userId: ctx.userId,
-        status: "ACCEPTED"
-      },
-      include: {
-        club: {
-          select: { types: true }
+
+  //  getRecommendedForYou: baseProcedure
+  //    .query(async ({ ctx }) => {
+
+  //   // Get user memberships with club types
+  //   const userMemberships = await prisma.membership.findMany({
+  //     where: { 
+  //       userId: ctx.userId,
+  //       status: "ACCEPTED"
+  //     },
+  //     include: {
+  //       club: {
+  //         select: { types: true }
+  //       }
+  //     }
+  //   });
+
+  //   const userClubIds = userMemberships.map(m => m.clubId);
+
+  //   // Extract user preferred types
+  //   const preferredTypes = Array.from(
+  //     new Set(
+  //       userMemberships.flatMap(m => m.club.types)
+  //     )
+  //   );
+
+  //   // Get candidate clubs (not in user's clubs)
+  //   const candidateClubs = await prisma.club.findMany({
+  //     where: {
+  //       id: { notIn: userClubIds }
+  //     },
+  //     include: {
+  //       _count: {
+  //         select: { memberships: true }
+  //       },
+  //       posts: {
+  //         where: {
+  //           createdAt: {
+  //             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  //           }
+  //         },
+  //         select: {
+  //           id: true,
+  //           title: true,
+  //           type: true,
+  //           createdAt: true
+  //         }
+  //       }
+  //     }
+  //   });
+
+  //   // Compute recommendation score
+  //   const scoredClubs = candidateClubs.map(club => {
+
+  //     let score = 0;
+
+  //     // Content similarity score
+  //     const matchingTypes = club.types.filter(t => preferredTypes.includes(t));
+  //     score += matchingTypes.length * 5;
+
+  //     // Activity score (recent posts)
+  //     score += club.posts.length * 2;
+
+  //     // Popularity boost
+  //     score += club._count.memberships * 0.1;
+
+  //     return {
+  //       club,
+  //       score
+  //     };
+  //   });
+
+  //   scoredClubs.sort((a, b) => b.score - a.score);
+
+  //   return {
+  //     clubs: scoredClubs.slice(0, 5).map(({ club, score }) => ({
+  //       id: club.id,
+  //       title: club.title,
+  //       description: club.description,
+  //       image_url: club.imageUrl,
+  //       membersCount: club._count.memberships,
+  //       recommendationScore: score,
+  //       recentPosts: club.posts.slice(0, 2)
+  //     }))
+  //   };
+  // }),
+
+  getRecommendedForYou: baseProcedure
+.query(async ({ ctx }) => {
+
+  // 1️⃣ Get user's club memberships
+  const memberships = await prisma.membership.findMany({
+    where: {
+      userId: ctx.userId
+    },
+    include: {
+      club: {
+        select: {
+          id: true,
+          types: true
         }
       }
-    });
+    }
+  })
 
-    const userClubIds = userMemberships.map(m => m.clubId);
+  const userClubIds = memberships.map(m => m.club.id)
 
-    // Extract user preferred types
-    const preferredTypes = Array.from(
-      new Set(
-        userMemberships.flatMap(m => m.club.types)
-      )
-    );
+  const preferredTypes = Array.from(
+    new Set(
+      memberships.flatMap(m => m.club.types)
+    )
+  )
 
-    // Get candidate clubs (not in user's clubs)
-    const candidateClubs = await prisma.club.findMany({
-      where: {
-        id: { notIn: userClubIds }
-      },
-      include: {
-        _count: {
-          select: { memberships: true }
-        },
-        posts: {
-          where: {
-            createdAt: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-            }
-          },
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            createdAt: true
-          }
+  // 2️⃣ Recommended clubs
+  const recommendedClubs = await prisma.club.findMany({
+    where: {
+      id: { notIn: userClubIds },
+      types: {
+        hasSome: preferredTypes
+      }
+    },
+    include: {
+      _count: {
+        select: { memberships: true }
+      }
+    },
+    take: 5
+  })
+
+  // 3️⃣ Recommended posts
+  const recommendedPosts = await prisma.post.findMany({
+    where: {
+      club: {
+        id: { notIn: userClubIds },
+        types: {
+          hasSome: preferredTypes
         }
       }
-    });
+    },
+    include: {
+      club: {
+        select: {
+          id: true,
+          title: true,
+          imageUrl: true
+        }
+      },
+      author: {
+        select: {
+          firstName: true,
+          lastName: true
+        }
+      },
+      _count: {
+        select: { upvotes: true }
+      }
+    },
+    orderBy: [
+      { createdAt: "desc" }
+    ],
+    take: 6
+  })
 
-    // Compute recommendation score
-    const scoredClubs = candidateClubs.map(club => {
+  return {
+    clubs: recommendedClubs.map(c => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      image_url: c.imageUrl,
+      membersCount: c._count.memberships
+    })),
 
-      let score = 0;
+    posts: recommendedPosts.map(p => ({
+      id: p.id,
+      title: p.title,
+      content: p.content,
+      created_at: p.createdAt,
 
-      // Content similarity score
-      const matchingTypes = club.types.filter(t => preferredTypes.includes(t));
-      score += matchingTypes.length * 5;
+      club: {
+        id: p.club.id,
+        title: p.club.title,
+        imageUrl: p.club.imageUrl
+      },
 
-      // Activity score (recent posts)
-      score += club.posts.length * 2;
+      author: {
+        firstName: p.author.firstName,
+        lastName: p.author.lastName
+      },
 
-      // Popularity boost
-      score += club._count.memberships * 0.1;
-
-      return {
-        club,
-        score
-      };
-    });
-
-    scoredClubs.sort((a, b) => b.score - a.score);
-
-    return {
-      clubs: scoredClubs.slice(0, 5).map(({ club, score }) => ({
-        id: club.id,
-        title: club.title,
-        description: club.description,
-        image_url: club.imageUrl,
-        membersCount: club._count.memberships,
-        recommendationScore: score,
-        recentPosts: club.posts.slice(0, 2)
-      }))
-    };
-  }),
+      upvotes_count: p._count.upvotes
+    }))
+  }
+})
 });
