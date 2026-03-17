@@ -283,9 +283,22 @@ export default function ForYouPage() {
                                 {a.club.Title}
                               </p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <Badge variant="secondary" className="gap-1 text-xs font-normal">
+                                <Badge
+                                  variant={
+                                    a.priority === "URGENT"
+                                      ? "destructive"
+                                      : a.priority === "IMPORTANT"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                  className="gap-1 text-xs font-normal"
+                                >
                                   <Megaphone className="size-3" />
-                                  Announcement
+                                  {a.priority === "URGENT"
+                                    ? "Urgent"
+                                    : a.priority === "IMPORTANT"
+                                    ? "Important"
+                                    : "Announcement"}
                                 </Badge>
                               </div>
                             </div>
