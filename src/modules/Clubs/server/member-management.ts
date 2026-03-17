@@ -252,6 +252,7 @@ export const memberManagementRouter = createTRPCRouter({
         createdAt: p.createdAt.toISOString(),
         author: `${p.author.firstName} ${p.author.lastName}`,
         authorId: p.authorId,
+        priority: p.priority,
       }))
     }),
 
@@ -263,6 +264,7 @@ export const memberManagementRouter = createTRPCRouter({
         title: z.string().min(1).max(500),
         content: z.string().min(1).max(10000),
         audience: z.enum(["PUBLIC", "MEMBERS_ONLY", "BOARD_ONLY"]).default("PUBLIC"),
+        priority: z.enum(["GENERAL", "IMPORTANT", "URGENT"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -277,6 +279,7 @@ export const memberManagementRouter = createTRPCRouter({
           type: "ANNOUNCEMENT",
           status: "DRAFT",
           audience: input.audience,
+          priority: input.priority ?? "GENERAL",
         },
       })
 
@@ -285,6 +288,7 @@ export const memberManagementRouter = createTRPCRouter({
         title: post.title,
         status: post.status,
         createdAt: post.createdAt.toISOString(),
+        priority: post.priority,
       }
     }),
 

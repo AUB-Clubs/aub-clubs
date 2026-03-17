@@ -38,7 +38,11 @@ export const forYouRouter = createTRPCRouter({
           clubId: { in: clubIds },
           ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [
+          { type: "desc" }, // announcements first
+          { priority: "desc" }, // URGENT > IMPORTANT > GENERAL
+          { createdAt: "desc" }
+        ],
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
         skip: cursor ? 1 : 0,
@@ -86,6 +90,7 @@ export const forYouRouter = createTRPCRouter({
           },
           upvotes_count: p._count.upvotes,
           has_upvoted: p.upvotes.length > 0,
+          priority: p.priority
         },
       }));
 
