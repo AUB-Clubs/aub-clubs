@@ -95,6 +95,7 @@ model User {
   memberships     Membership[]
   posts           Post[]               @relation("AuthoredPosts")
   upvotes         Upvote[]
+  eventRegistrations EventRegistration[]
   performedAudits MembershipAuditLog[] @relation("AuditActor")
 
   @@map("users")
@@ -116,6 +117,7 @@ model Club {
   // Relations
   memberships     Membership[]
   posts           Post[]
+  events          Event[]
 
   @@map("clubs")
 }
