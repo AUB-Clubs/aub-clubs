@@ -3,6 +3,7 @@ import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
 import { memberManagementRouter } from "./member-management"
+import { eventsRouter } from "./events"
 
 const ClubTypeEnum = z.enum([
   "ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",
@@ -23,6 +24,7 @@ function computeCommitmentLevel(latestAnnouncementDate: Date | null): "HIGH" | "
 
 export const clubsRouter = createTRPCRouter({
   memberManagement: memberManagementRouter,
+  events: eventsRouter,
   requestJoin: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -64,7 +66,18 @@ export const clubsRouter = createTRPCRouter({
 
       const club = await prisma.club.findUnique({
         where: { id: clubId },
-        select: { id: true, title: true, description: true, imageUrl: true, bannerUrl: true, types: true, _count: { select: { memberships: true } } },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          mission: true,
+          imageUrl: true,
+          bannerUrl: true,
+          instagramUrl: true,
+          websiteUrl: true,
+          types: true,
+          _count: { select: { memberships: true } },
+        },
       })
 
       if (!club) {
@@ -195,8 +208,11 @@ export const clubsRouter = createTRPCRouter({
       const { clubId, limit, cursor } = input
 
       const posts = await prisma.post.findMany({
-        where: { clubId, type: "ANNOUNCEMENT" },
-        orderBy: { createdAt: "desc" },
+        where: { clubId, type: "ANNOUNCEMENT", status: "PUBLISHED", audience: "PUBLIC" },
+        orderBy: [
+          { pinnedAt: "desc" },
+          { createdAt: "desc" },
+        ],
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
         include: {
@@ -219,6 +235,7 @@ export const clubsRouter = createTRPCRouter({
           title: p.title,
           content: p.content,
           createdAt: p.createdAt.toISOString(),
+          pinnedAt: p.pinnedAt?.toISOString() ?? null,
           author: `${p.author.firstName} ${p.author.lastName}`,
           authorId: p.author.id,
           imageUrls: p.postImages.map(
