@@ -181,7 +181,7 @@ export const eventsRouter = createTRPCRouter({
 
       const event = await prisma.event.findUnique({
         where: { id: input.eventId },
-        select: { clubId: true, capacity: true, waitlistEnabled: true },
+        select: { id: true, clubId: true, capacity: true, waitlistEnabled: true },
       });
 
       if (!event) {
