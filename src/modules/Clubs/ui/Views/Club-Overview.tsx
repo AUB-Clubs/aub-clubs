@@ -15,6 +15,7 @@ import { trpc } from '@/trpc/client'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { toast } from 'sonner'
 import { useInView } from 'react-intersection-observer'
 import {
   Card,
@@ -224,6 +225,10 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       utils.clubs.getAnnouncements.invalidate({ clubId })
       setPostDialogOpen(false)
       setPostForm({ title: '', content: '', type: 'GENERAL' })
+      toast.success("Post created successfully!")
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to create post. Please try again.")
     },
   })
   const [joinConfirmOpen, setJoinConfirmOpen] = useState(false)
