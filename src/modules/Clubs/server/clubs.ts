@@ -2,7 +2,10 @@ import { z } from "zod"
 import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
+import { HfInference } from "@huggingface/inference"
 import { memberManagementRouter } from "./member-management"
+import { eventsRouter } from "./events"
+import { analyticsRouter } from "./analytics"
 
 const ClubTypeEnum = z.enum([
   "ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",
@@ -23,6 +26,8 @@ function computeCommitmentLevel(latestAnnouncementDate: Date | null): "HIGH" | "
 
 export const clubsRouter = createTRPCRouter({
   memberManagement: memberManagementRouter,
+  events: eventsRouter,
+  analytics: analyticsRouter,
   requestJoin: baseProcedure
     .input(z.object({ clubId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -64,7 +69,18 @@ export const clubsRouter = createTRPCRouter({
 
       const club = await prisma.club.findUnique({
         where: { id: clubId },
-        select: { id: true, title: true, description: true, imageUrl: true, bannerUrl: true, types: true, _count: { select: { memberships: true } } },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          mission: true,
+          imageUrl: true,
+          bannerUrl: true,
+          instagramUrl: true,
+          websiteUrl: true,
+          types: true,
+          _count: { select: { memberships: true } },
+        },
       })
 
       if (!club) {
@@ -195,8 +211,11 @@ export const clubsRouter = createTRPCRouter({
       const { clubId, limit, cursor } = input
 
       const posts = await prisma.post.findMany({
-        where: { clubId, type: "ANNOUNCEMENT" },
-        orderBy: { createdAt: "desc" },
+        where: { clubId, type: "ANNOUNCEMENT", status: "PUBLISHED", audience: "PUBLIC" },
+        orderBy: [
+          { pinnedAt: "desc" },
+          { createdAt: "desc" },
+        ],
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
         include: {
@@ -219,6 +238,7 @@ export const clubsRouter = createTRPCRouter({
           title: p.title,
           content: p.content,
           createdAt: p.createdAt.toISOString(),
+          pinnedAt: p.pinnedAt?.toISOString() ?? null,
           author: `${p.author.firstName} ${p.author.lastName}`,
           authorId: p.author.id,
           imageUrls: p.postImages.map(
@@ -280,6 +300,34 @@ export const clubsRouter = createTRPCRouter({
           code: "FORBIDDEN",
           message: "Only presidents and vice presidents can post announcements",
         })
+      }
+
+      // Hugging Face AI Moderation Check (Llama Guard 4)
+      try {
+        const hf = new HfInference(process.env.HF_TOKEN);
+        // We verify both the title and content
+        const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
+        const chat = [{ role: "user", content: textToCheck }];
+        
+        const response = await hf.chatCompletion({
+          model: "meta-llama/Llama-Guard-4-12B",
+          messages: chat,
+          max_tokens: 10,
+        });
+
+        // The model returns "safe" or "unsafe\n[CATEGORY_CODE]"
+        const result = response.choices[0]?.message?.content?.toLowerCase() || "";
+        if (result.includes("unsafe")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Your post violates community guidelines and contains inappropriate language. Please revise it.",
+          });
+        }
+      } catch (error) {
+        // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is just down/unauthorized, or decide to block.
+        if (error instanceof TRPCError) throw error;
+        console.error("AI Moderation Error:", error);
+        // Depending on strictness, we might allow it to pass or fail if moderation is down. We'll let it pass if HF is unreachable, ensuring posts aren't entirely bricked.
       }
 
       const post = await prisma.post.create({
