@@ -302,33 +302,69 @@ export const clubsRouter = createTRPCRouter({
         })
       }
 
-      // Hugging Face AI Moderation Check (Llama Guard 4)
+      // Hugging Face AI Moderation Check (KoalaAI/Text-Moderation)
       if (process.env.HF_TOKEN) {
         try {
           const hf = new HfInference(process.env.HF_TOKEN);
           // We verify both the title and content
           const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
-          const chat = [{ role: "user", content: textToCheck }];
           
-          const response = await hf.chatCompletion({
-            model: "meta-llama/Llama-Guard-3-8B",
-            messages: chat,
-            max_tokens: 10,
+          const response = await hf.textClassification({
+            model: "KoalaAI/Text-Moderation",
+            inputs: textToCheck,
           });
 
-          // The model returns "safe" or "unsafe\n[CATEGORY_CODE]"
-          const result = response.choices[0]?.message?.content?.toLowerCase() || "";
-          if (result.includes("unsafe")) {
+          // Console log the result to debug/audit responses
+          console.log("AI Moderation Result:", response);
+
+          // The model returns an array of label objects. Usually 'OK' is the top score if it's safe.
+          // Since the model outputs multiple labels, we check the probability of 'OK' vs others.
+          const topResult = response[0];
+          
+          // Let's be explicit and define the unsafe categories based on KoalaAI/Text-Moderation
+          const unsafeLabels = ["S", "H", "V", "HR", "SH", "S3", "H2", "V2"];
+          
+          // If the model is not at least 95% confident it's OK, OR if an unsafe label scores higher than very low threshold
+          let isUnsafe = false;
+          let offendingLabel = topResult.label;
+
+          if (topResult.label === "OK" && topResult.score < 0.95) {
+             isUnsafe = true;
+             // Find the next highest unsafe label to explain why
+             const nextHighest = response.find(r => unsafeLabels.includes(r.label));
+             if (nextHighest) offendingLabel = nextHighest.label;
+          } else if (unsafeLabels.includes(topResult.label) && topResult.score > 0.05) {
+             isUnsafe = true;
+          }
+
+          if (isUnsafe) {
+            let reason = "inappropriate language";
+            
+            // Map the label to a friendly reason string
+            const reasonMap: Record<string, string> = {
+              "S": "sexual content",
+              "H": "hate speech",
+              "V": "violence",
+              "HR": "harassment",
+              "SH": "self-harm promotion",
+              "S3": "sexual content involving minors",
+              "H2": "threatening hate speech",
+              "V2": "graphic violence"
+            };
+            
+            if (reasonMap[offendingLabel]) {
+               reason = reasonMap[offendingLabel] as string;
+            }
+
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Your post violates community guidelines and contains inappropriate language. Please revise it.",
+              message: `Your post violates community guidelines and contains ${reason}. Please revise it.`,
             });
           }
         } catch (error: any) {
-          // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is just down/unauthorized, or decide to block.
+          // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is down.
           if (error instanceof TRPCError) throw error;
-          // Depending on strictness, we might allow it to pass or fail if moderation is down. We'll let it pass if HF is unreachable.
-          console.error("AI Moderation Warning: Failed to reach HuggingFace API (possibly due to gated model access or rate limits). Post allowed by default." + error);
+          console.error("AI Moderation Warning: Failed to reach HuggingFace API. Post allowed by default. " + error);
         }
       }
 
