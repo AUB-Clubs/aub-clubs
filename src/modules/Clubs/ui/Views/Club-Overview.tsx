@@ -15,6 +15,7 @@ import { trpc } from '@/trpc/client'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { toast } from 'sonner'
 import { useInView } from 'react-intersection-observer'
 import {
   Card,
@@ -48,10 +49,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ClubEventsPublic from '@/modules/Clubs/ui/components/ClubEventsPublic'
 
 function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
   const query = trpc.commitmentLevel.getCommitmentLevel.useQuery({ clubId });
@@ -116,6 +119,7 @@ interface ClubAnnouncement {
   title: string
   content: string
   createdAt: string
+  pinnedAt: string | null
   author: string
   authorId: string
   imageUrls: string[]
@@ -221,6 +225,10 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       utils.clubs.getAnnouncements.invalidate({ clubId })
       setPostDialogOpen(false)
       setPostForm({ title: '', content: '', type: 'GENERAL' })
+      toast.success("Post created successfully!")
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to create post. Please try again.")
     },
   })
   const [joinConfirmOpen, setJoinConfirmOpen] = useState(false)
@@ -541,9 +549,70 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 {isLoading ? (
                   <Skeleton className="h-4 w-full" />
                 ) : (
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                    {club?.description || 'No description yet.'}
-                  </p>
+                  <div className="space-y-3">
+                    {(() => {
+                      const description = club?.description ?? ''
+                      const mission = club?.mission ?? ''
+                      const websiteUrl = club?.websiteUrl ?? undefined
+                      const instagramUrl = club?.instagramUrl ?? undefined
+
+                      const isLong = description.length > 220
+
+                      return (
+                        <Collapsible defaultOpen={!isLong}>
+                          <CollapsibleContent>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                              {description || 'No description yet.'}
+                            </p>
+
+                            {mission ? (
+                              <div className="pt-2 space-y-1">
+                                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                                  Mission
+                                </p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                                  {mission}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {(websiteUrl || instagramUrl) ? (
+                              <div className="flex flex-wrap gap-2 pt-2">
+                                {websiteUrl ? (
+                                  <a
+                                    href={websiteUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-sm underline underline-offset-4 text-muted-foreground hover:text-primary"
+                                  >
+                                    Website
+                                  </a>
+                                ) : null}
+                                {instagramUrl ? (
+                                  <a
+                                    href={instagramUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-sm underline underline-offset-4 text-muted-foreground hover:text-primary"
+                                  >
+                                    Instagram
+                                  </a>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </CollapsibleContent>
+
+                          {isLong ? (
+                            <CollapsibleTrigger asChild>
+                              <Button variant="link" className="h-auto px-0">
+                                {isLong ? 'Show more' : 'Show less'}
+                              </Button>
+                            </CollapsibleTrigger>
+                          ) : null}
+                        </Collapsible>
+                      )
+                    })()}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -675,6 +744,11 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                   <Megaphone className="size-3" />
                                   Announcement
                                 </Badge>
+                                {announcement.pinnedAt && (
+                                  <Badge variant="outline" className="text-xs font-semibold">
+                                    Pinned
+                                  </Badge>
+                                )}
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-2">
@@ -947,19 +1021,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
           </TabsContent>
 
           <TabsContent value="events" className="mt-0">
-            <Card className="overflow-hidden transition-shadow hover:shadow-md border-dashed">
-              <Empty className="py-12">
-                <EmptyMedia variant="icon">
-                  <CalendarDays className="size-8 text-muted-foreground" />
-                </EmptyMedia>
-                <EmptyHeader>
-                  <EmptyTitle>No events yet</EmptyTitle>
-                  <EmptyDescription>
-                    When the club schedules events, they will appear here.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            </Card>
+            <ClubEventsPublic clubId={clubId!} />
           </TabsContent>
         </Tabs>
       </div>
