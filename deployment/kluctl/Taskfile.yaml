@@ -139,4 +139,15 @@ tasks:
       - gcloud container clusters get-credentials ${CLUSTER_NAME} --zone ${GCP_ZONE}
       - kubectl delete job db-seeding -n aub-clubs --ignore-not-found
       - kubectl apply -f manual/Job.db-seeding.yaml
-
+  clean-up:
+    cmds:
+      - gcloud container clusters delete ${CLUSTER_NAME} --zone ${GCP_ZONE} --quiet
+      - gcloud compute networks subnets delete subnet-1 --region=${GCP_REGION} --quiet
+      - gcloud compute networks delete ${CLUSTER_NAME} --quiet
+    desc: Delete the GCP network, subnet, firewall rules, and cluster in reverse sequence
+  clean-up-s:
+    cmds:
+      - gcloud container clusters delete ${CLUSTER_NAME_STAGING} --zone ${GCP_ZONE} --quiet
+      - gcloud compute networks subnets delete subnet-2 --region=${GCP_REGION} --quiet
+      - gcloud compute networks delete ${CLUSTER_NAME_STAGING} --quiet
+    desc: Delete the GCP network, subnet, firewall rules, and cluster in reverse sequence
