@@ -5,7 +5,7 @@ import fs from "fs"
 const data: string = fs.readFileSync("./speakers.md", "utf8")
 
 function markdownSplitter(markdownText: string) {
-  const regex = /^### (.+?)(?:\n([\s\S]*?))(?=^### |\Z)/gm
+  const regex = /^## (.+?)(?:\n([\s\S]*?))(?=^## |\Z)/gm
   let matches
   const entities: string[] = []
 
