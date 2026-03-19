@@ -11,6 +11,16 @@ datasource db {
 // Enums
 // --------------------
 
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum MessageType {
+  RESULT
+  ERROR
+}
+
 enum ClubRole {
   MEMBER
   BOARD         // Generic for logistics, treasurer, etc. (use customTitle for specifics)
@@ -107,6 +117,7 @@ model Club {
   // Relations
   memberships     Membership[]
   posts           Post[]
+  projects        Project[]
 
   @@map("clubs")
 }
@@ -205,4 +216,42 @@ model Upvote {
   @@index([postId]) 
   
   @@map("upvotes")
+}
+
+model Message {
+  id String @id @default(uuid())
+  content String
+  role MessageRole
+  type MessageType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fragment Fragment?
+
+  projectId String 
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Fragment {
+  id String @id @default(uuid())
+  messageId String @unique
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  title String
+  eventOutput String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id String @id @default(uuid())
+  clubId String
+  name String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 }
