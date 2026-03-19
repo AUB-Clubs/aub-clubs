@@ -66,8 +66,8 @@ export const eventsRouter = createTRPCRouter({
     .input(
       z.object({
         clubId: z.string(),
-        upcomingLimit: z.number().min(1).max(20).default(6),
-        pastLimit: z.number().min(1).max(20).default(6),
+        upcomingLimit: z.number().min(1).max(100).default(6),
+        pastLimit: z.number().min(1).max(100).default(6),
       })
     )
     .query(async ({ ctx, input }) => {
