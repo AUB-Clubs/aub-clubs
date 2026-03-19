@@ -2,6 +2,7 @@ import { z } from "zod"
 import { createTRPCRouter, baseProcedure } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
+import { HfInference } from "@huggingface/inference"
 import { memberManagementRouter } from "./member-management"
 import { eventsRouter } from "./events"
 import { analyticsRouter } from "./analytics"
@@ -299,6 +300,34 @@ export const clubsRouter = createTRPCRouter({
           code: "FORBIDDEN",
           message: "Only presidents and vice presidents can post announcements",
         })
+      }
+
+      // Hugging Face AI Moderation Check (Llama Guard 4)
+      try {
+        const hf = new HfInference(process.env.HF_TOKEN);
+        // We verify both the title and content
+        const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
+        const chat = [{ role: "user", content: textToCheck }];
+        
+        const response = await hf.chatCompletion({
+          model: "meta-llama/Llama-Guard-4-12B",
+          messages: chat,
+          max_tokens: 10,
+        });
+
+        // The model returns "safe" or "unsafe\n[CATEGORY_CODE]"
+        const result = response.choices[0]?.message?.content?.toLowerCase() || "";
+        if (result.includes("unsafe")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Your post violates community guidelines and contains inappropriate language. Please revise it.",
+          });
+        }
+      } catch (error) {
+        // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is just down/unauthorized, or decide to block.
+        if (error instanceof TRPCError) throw error;
+        console.error("AI Moderation Error:", error);
+        // Depending on strictness, we might allow it to pass or fail if moderation is down. We'll let it pass if HF is unreachable, ensuring posts aren't entirely bricked.
       }
 
       const post = await prisma.post.create({
