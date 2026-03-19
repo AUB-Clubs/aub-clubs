@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: seed
-          image: hamzarach69/aub-clubs-seed:c0954e2
+          image: hamzarach69/aub-clubs-seed:ef8af1d
           envFrom:
             - secretRef:
                 name: next-app-database-url
