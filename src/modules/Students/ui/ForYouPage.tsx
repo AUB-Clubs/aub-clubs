@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils'
 function UpvoteButton({ postId, initialCount, initialLiked }: { postId: string, initialCount: number, initialLiked: boolean }) {
   const [count, setCount] = useState(initialCount)
   const [liked, setLiked] = useState(initialLiked)
-  const utils = trpc.useUtils()
   
   const toggleMutation = trpc.clubs.toggleUpvote.useMutation({
     onMutate: async () => {
@@ -33,10 +32,6 @@ function UpvoteButton({ postId, initialCount, initialLiked }: { postId: string, 
     onError: () => {
        setLiked(initialLiked)
        setCount(initialCount)
-    },
-    onSuccess: () => {
-       // Optional: invalidate if we want strict consistency, but optimistic is usually enough for upvotes
-       // utils.forYou.getFeed.invalidate()
     }
   })
 
@@ -87,12 +82,14 @@ export default function ForYouPage() {
       enabled: !!profile, // Wait for profile before fetching feed
     }
   )
+  const { hasNextPage, fetchNextPage } = feedQuery
+
 
   useEffect(() => {
-    if (inView && feedQuery.hasNextPage) {
-      feedQuery.fetchNextPage()
+    if (inView && hasNextPage) {
+      fetchNextPage()
     }
-  }, [inView, feedQuery.hasNextPage])
+  }, [inView, hasNextPage, fetchNextPage])
 
   const items = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
   const isLoading = feedQuery.isLoading
@@ -188,9 +185,22 @@ export default function ForYouPage() {
                                 {a.club.Title}
                               </p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <Badge variant="secondary" className="gap-1 text-xs font-normal">
+                                <Badge
+                                  variant={
+                                    a.priority === "URGENT"
+                                      ? "destructive"
+                                      : a.priority === "IMPORTANT"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                  className="gap-1 text-xs font-normal"
+                                >
                                   <Megaphone className="size-3" />
-                                  Announcement
+                                  {a.priority === "URGENT"
+                                    ? "Urgent"
+                                    : a.priority === "IMPORTANT"
+                                    ? "Important"
+                                    : "Normal"}
                                 </Badge>
                               </div>
                             </div>
@@ -263,7 +273,7 @@ export default function ForYouPage() {
         )}
 
         {/* Load more / Infinite Scroll Trigger */}
-        {feedQuery.hasNextPage && (
+        {hasNextPage && (
           <div ref={ref} className="mt-6 flex justify-center py-4">
             {feedQuery.isFetchingNextPage ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

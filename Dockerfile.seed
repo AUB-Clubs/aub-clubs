@@ -19,6 +19,9 @@ RUN npm init -y && \
 # Copy only the Prisma schema and seed script
 COPY prisma ./prisma
 
+# Copy clubs.json (used by seed to create real club data)
+COPY clubs.json ./clubs.json
+
 # Copy only the necessary source files required by the seed script
 # This significantly reduces the build context and cache invalidation scope
 COPY src/lib/prisma.ts ./src/lib/prisma.ts

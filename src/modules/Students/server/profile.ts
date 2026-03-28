@@ -79,4 +79,43 @@ export const profileRouter = createTRPCRouter({
       });
       return updated;
     }),
+
+  getJoinRequests: baseProcedure
+    .input(
+      z.object({
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(100).default(10),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { page, limit } = input;
+      const skip = (page - 1) * limit;
+      const userId = ctx.userId;
+
+      const [requests, totalCount] = await Promise.all([
+        prisma.membership.findMany({
+          where: { userId },
+          take: limit,
+          skip,
+          include: {
+            club: {
+              select: {
+                id: true,
+                title: true,
+                crn: true,
+                imageUrl: true,
+              },
+            },
+          },
+          orderBy: { joinedAt: "desc" },
+        }),
+        prisma.membership.count({ where: { userId } }),
+      ]);
+
+      return {
+        requests,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      };
+    }),
 });
