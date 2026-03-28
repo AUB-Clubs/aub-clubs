@@ -23,6 +23,7 @@ import {
   Settings,
   Users,
   ClipboardList,
+  Compass,
 } from 'lucide-react';
 
 export function AppSidebar() {
@@ -34,7 +35,8 @@ export function AppSidebar() {
   });
 
   const items = [
-    { title: "For You", url: "/me", icon: Home },
+    { title: "Discover", url: "/discover", icon: Compass },
+    { title: "My Clubs", url: "/me", icon: Home },
     { title: "Clubs", url: "/clubs", icon: Users },
   ];
 

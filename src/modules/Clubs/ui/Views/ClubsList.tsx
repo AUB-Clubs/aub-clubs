@@ -41,6 +41,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ClubListSkeletonRow } from '@/modules/Clubs/ui/components/Skeletons';
+import { RecommendedClubsSection } from '@/modules/Clubs/ui/components/RecommendedClubsSection';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -236,6 +237,9 @@ export default function ClubList() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Recommended Clubs Section */}
+      <RecommendedClubsSection />
+
       <div className="mb-8 space-y-4">
         <div className="flex items-center justify-between">
           <div>

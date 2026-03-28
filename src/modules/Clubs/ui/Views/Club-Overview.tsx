@@ -55,6 +55,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ClubEventsPublic from '@/modules/Clubs/ui/components/ClubEventsPublic'
+import { SimilarClubsSection } from '@/modules/Clubs/ui/components/SimilarClubsSection'
 
 function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
   const query = trpc.commitmentLevel.getCommitmentLevel.useQuery({ clubId });
@@ -118,6 +119,7 @@ interface ClubAnnouncement {
   id: string
   title: string
   content: string
+  priority: 'GENERAL' | 'IMPORTANT' | 'URGENT'
   createdAt: string
   pinnedAt: string | null
   author: string
@@ -616,6 +618,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 )}
               </CardContent>
             </Card>
+
+            {/* Similar Clubs Section */}
+            {clubId && <SimilarClubsSection clubId={clubId} />}
           </TabsContent>
 
           <TabsContent value="members" className="mt-0">
@@ -738,11 +743,21 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                             <CardHeader className="pb-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge
-                                  variant="secondary"
+                                  variant={
+                                    announcement.priority === 'URGENT'
+                                      ? 'destructive'
+                                      : announcement.priority === 'IMPORTANT'
+                                        ? 'default'
+                                        : 'secondary'
+                                  }
                                   className="gap-1 text-xs font-normal"
                                 >
                                   <Megaphone className="size-3" />
-                                  Announcement
+                                  {announcement.priority === 'URGENT'
+                                    ? 'Urgent'
+                                    : announcement.priority === 'IMPORTANT'
+                                      ? 'Important'
+                                      : 'Normal'}
                                 </Badge>
                                 {announcement.pinnedAt && (
                                   <Badge variant="outline" className="text-xs font-semibold">

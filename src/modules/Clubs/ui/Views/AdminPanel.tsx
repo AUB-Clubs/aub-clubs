@@ -83,6 +83,12 @@ const AUDIENCE_LABELS: Record<string, string> = {
   BOARD_ONLY: 'Board Only',
 }
 
+const ANNOUNCEMENT_PRIORITY_LABELS: Record<string, string> = {
+  GENERAL: 'Normal',
+  IMPORTANT: 'Important',
+  URGENT: 'Urgent',
+}
+
 function getInitials(firstName?: string | null, lastName?: string | null) {
   return [firstName?.[0], lastName?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 }
@@ -655,7 +661,9 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     title: '',
     content: '',
     audience: 'PUBLIC' as 'PUBLIC' | 'MEMBERS_ONLY' | 'BOARD_ONLY',
+    priority: 'GENERAL' as 'GENERAL' | 'IMPORTANT' | 'URGENT',
   })
+  
 
   const announcementsQuery = trpc.clubs.memberManagement.getAdminAnnouncements.useQuery(
     { clubId },
@@ -668,7 +676,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     onSuccess: () => {
       utils.clubs.memberManagement.getAdminAnnouncements.invalidate({ clubId })
       setCreateOpen(false)
-      setForm({ title: '', content: '', audience: 'PUBLIC' })
+      setForm({ title: '', content: '', audience: 'PUBLIC', priority: 'GENERAL' })
     },
   })
 
@@ -687,6 +695,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
       title: form.title.trim(),
       content: form.content.trim(),
       audience: form.audience,
+      priority: form.priority,
     })
   }
 
@@ -769,6 +778,27 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={form.priority}
+                  onValueChange={(val) =>
+                    setForm((f) => ({
+                      ...f,
+                      priority: val as 'GENERAL' | 'IMPORTANT' | 'URGENT',
+                    }))
+                  }
+                >
+                  <SelectTrigger className="rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GENERAL">Normal</SelectItem>
+                    <SelectItem value="IMPORTANT">Important</SelectItem>
+                    <SelectItem value="URGENT">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   type="button"
@@ -825,6 +855,18 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                     </Badge>
                     <Badge variant="outline" className="text-xs">
                       {AUDIENCE_LABELS[a.audience] ?? a.audience}
+                    </Badge>
+                    <Badge
+                      variant={
+                        a.priority === 'URGENT'
+                          ? 'destructive'
+                          : a.priority === 'IMPORTANT'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                      className="text-xs"
+                    >
+                      {ANNOUNCEMENT_PRIORITY_LABELS[a.priority] ?? a.priority}
                     </Badge>
                   </div>
                   {a.status === 'DRAFT' && (
