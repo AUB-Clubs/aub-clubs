@@ -55,6 +55,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ClubEventsPublic from '@/modules/Clubs/ui/components/ClubEventsPublic'
+import { SimilarClubsSection } from '@/modules/Clubs/ui/components/SimilarClubsSection'
 
 function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
   const query = trpc.commitmentLevel.getCommitmentLevel.useQuery({ clubId });
@@ -616,6 +617,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                 )}
               </CardContent>
             </Card>
+
+            {/* Similar Clubs Section */}
+            {clubId && <SimilarClubsSection clubId={clubId} />}
           </TabsContent>
 
           <TabsContent value="members" className="mt-0">

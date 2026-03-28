@@ -62,9 +62,6 @@ export function ClubRecommendationCard({ club, variant = 'grid' }: ClubRecommend
       queryClient.invalidateQueries({
         queryKey: getQueryKey(trpc.recommendations.getRecommendedClubs),
       });
-      queryClient.invalidateQueries({
-        queryKey: getQueryKey(trpc.clubs.getAll),
-      });
     },
     onSettled: () => {
       setIsJoining(false);
