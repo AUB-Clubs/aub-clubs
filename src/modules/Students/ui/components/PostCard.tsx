@@ -17,15 +17,16 @@ type Priority = 'URGENT' | 'IMPORTANT' | 'GENERAL';
 
 interface PostData {
   id: string;
-  title: string;
+  title?: string | null;
   content: string;
   type: PostType;
-  priority?: Priority;
+  priority?: Priority | null;
   createdAt: Date;
   club: {
     id: string;
     title: string;
     imageUrl?: string | null;
+    types: string[];
   };
   author: {
     id: string;
@@ -33,10 +34,9 @@ interface PostData {
     lastName: string;
     avatarUrl?: string | null;
   };
-  _count: {
-    upvotes: number;
-  };
-  upvotes: Array<{ id: string }>;
+  upvotesCount: number;
+  hasUpvoted: boolean;
+  trendingScore?: number;
 }
 
 interface PostCardProps {
@@ -144,8 +144,8 @@ export function PostCard({ post, variant = 'default', showJoinButton = false, on
   };
 
   const isAnnouncement = post.type === 'ANNOUNCEMENT';
-  const upvoteCount = post._count.upvotes;
-  const hasUpvoted = post.upvotes.length > 0;
+  const upvoteCount = post.upvotesCount;
+  const hasUpvoted = post.hasUpvoted;
 
   return (
     <Card className="overflow-hidden transition-shadow hover:shadow-md">

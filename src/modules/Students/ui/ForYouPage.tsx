@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils'
 function UpvoteButton({ postId, initialCount, initialLiked }: { postId: string, initialCount: number, initialLiked: boolean }) {
   const [count, setCount] = useState(initialCount)
   const [liked, setLiked] = useState(initialLiked)
-  const utils = trpc.useUtils()
   
   const toggleMutation = trpc.clubs.toggleUpvote.useMutation({
     onMutate: async () => {
@@ -33,10 +32,6 @@ function UpvoteButton({ postId, initialCount, initialLiked }: { postId: string, 
     onError: () => {
        setLiked(initialLiked)
        setCount(initialCount)
-    },
-    onSuccess: () => {
-       // Optional: invalidate if we want strict consistency, but optimistic is usually enough for upvotes
-       // utils.forYou.getFeed.invalidate()
     }
   })
 
@@ -87,17 +82,14 @@ export default function ForYouPage() {
       enabled: !!profile, // Wait for profile before fetching feed
     }
   )
-  const recommendedQuery = trpc.forYou.getRecommendedForYou.useQuery(undefined, {
-    enabled: !!profile,
-    staleTime: 1000 * 60 * 5,
-  });
+  const { hasNextPage, fetchNextPage } = feedQuery
 
 
   useEffect(() => {
-    if (inView && feedQuery.hasNextPage) {
-      feedQuery.fetchNextPage()
+    if (inView && hasNextPage) {
+      fetchNextPage()
     }
-  }, [inView, feedQuery.hasNextPage])
+  }, [inView, hasNextPage, fetchNextPage])
 
   const items = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
   const isLoading = feedQuery.isLoading
@@ -115,96 +107,6 @@ export default function ForYouPage() {
             Announcements and posts from your clubs, in one place.
           </p>
         </header>
-
-        {/* Recommended Clubs */}
-        {recommendedQuery.data?.clubs && recommendedQuery.data.clubs.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-xl font-semibold mb-4">
-              Recommended Clubs
-            </h2>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              {recommendedQuery.data.clubs.map((club) => (
-                <Card key={club.id}>
-                  <CardHeader>
-                    <p className="font-medium">{club.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {club.membersCount} members
-                    </p>
-                  </CardHeader>
-
-                  <CardContent className="text-sm text-muted-foreground">
-                    {club.description}
-                  </CardContent>
-
-                  <CardFooter>
-                    <Button asChild size="sm">
-                      <Link href={`/clubs/${club.id}`}>
-                        View Club
-                      </Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Discover Posts */}
-        {recommendedQuery.data?.posts && recommendedQuery.data.posts.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-xl font-semibold mb-4">
-              Discover Posts From Other Clubs
-            </h2>
-
-            <div className="space-y-4">
-              {recommendedQuery.data.posts.map((post) => (
-                <Card key={post.id}>
-                  <CardHeader>
-                    <Link
-                      href={`/clubs/${post.club.id}`}
-                      className="flex items-center gap-2"
-                    >
-                      <Avatar className="size-8">
-                        {post.club.imageUrl && (
-                          <AvatarImage src={post.club.imageUrl} />
-                        )}
-                        <AvatarFallback>
-                          {post.club.title.slice(0,2)}
-                        </AvatarFallback>
-                      </Avatar>
-
-                      <div>
-                        <p className="text-sm font-medium">
-                          {post.club.title}
-                        </p>
-
-                        <p className="text-xs text-muted-foreground">
-                          {post.author.firstName} {post.author.lastName}
-                        </p>
-                      </div>
-                    </Link>
-                  </CardHeader>
-
-                  <CardContent>
-                    {post.title && (
-                      <p className="font-medium">{post.title}</p>
-                    )}
-
-                    <p className="text-sm text-muted-foreground">
-                      {post.content}
-                    </p>
-                  </CardContent>
-
-                  <CardFooter className="text-xs text-muted-foreground">
-                    {post.upvotes_count} upvotes
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          </section>
-        )}
-
 
         <Tabs defaultValue="ALL" onValueChange={(val) => setFilter(val as 'ALL' | 'ANNOUNCEMENT' | 'GENERAL')} className="w-full mb-8">
           <TabsList className="grid w-full grid-cols-3">
@@ -371,7 +273,7 @@ export default function ForYouPage() {
         )}
 
         {/* Load more / Infinite Scroll Trigger */}
-        {feedQuery.hasNextPage && (
+        {hasNextPage && (
           <div ref={ref} className="mt-6 flex justify-center py-4">
             {feedQuery.isFetchingNextPage ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -11,13 +11,13 @@ interface SimilarClubsSectionProps {
 
 function SkeletonCard() {
   return (
-    <Card className="w-[200px] flex-shrink-0">
-      <CardContent className="p-4 space-y-3">
+    <Card className="w-full">
+      <CardContent className="p-3 space-y-2.5">
         <div className="flex justify-center">
-          <Skeleton className="h-12 w-12 rounded-full" />
+          <Skeleton className="h-10 w-10 rounded-full" />
         </div>
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-9 w-full" />
           <div className="flex gap-1 justify-center">
             <Skeleton className="h-5 w-16" />
             <Skeleton className="h-5 w-16" />
@@ -31,6 +31,8 @@ function SkeletonCard() {
 }
 
 export function SimilarClubsSection({ clubId }: SimilarClubsSectionProps) {
+  const skeletonCount = 6;
+
   const { data: similarClubs, isLoading } = trpc.recommendations.getSimilarClubs.useQuery(
     { clubId, limit: 5 },
     {
@@ -45,7 +47,7 @@ export function SimilarClubsSection({ clubId }: SimilarClubsSectionProps) {
   }
 
   return (
-    <div className="mt-8 space-y-4">
+    <div className="mt-8 space-y-3">
       <div>
         <h2 className="text-xl font-semibold">Similar Clubs</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -53,61 +55,25 @@ export function SimilarClubsSection({ clubId }: SimilarClubsSectionProps) {
         </p>
       </div>
 
-      {/* Mobile: Horizontal scroll */}
-      <div className="flex gap-4 overflow-x-auto pb-4 sm:hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-        {isLoading ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : (
-          similarClubs?.map((club) => (
-            <ClubRecommendationCard
-              key={club.id}
-              club={{ ...club, imageUrl: club.imageUrl ?? undefined }}
-              variant="compact"
-            />
-          ))
-        )}
-      </div>
-
-      {/* Tablet: 2-column grid */}
-      <div className="hidden sm:grid lg:hidden grid-cols-2 gap-4">
-        {isLoading ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : (
-          similarClubs?.map((club) => (
-            <ClubRecommendationCard
-              key={club.id}
-              club={{ ...club, imageUrl: club.imageUrl ?? undefined }}
-              variant="compact"
-            />
-          ))
-        )}
-      </div>
-
-      {/* Desktop: 3-column grid */}
-      <div className="hidden lg:grid grid-cols-3 gap-4">
-        {isLoading ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : (
-          similarClubs?.map((club) => (
-            <ClubRecommendationCard
-              key={club.id}
-              club={{ ...club, imageUrl: club.imageUrl ?? undefined }}
-              variant="compact"
-            />
-          ))
-        )}
+      {/* Horizontal (x-axis) scroll view */}
+      <div className="overflow-x-auto overflow-y-hidden pb-2 pr-1 [scrollbar-gutter:stable] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+        <div className="grid min-w-max grid-flow-col auto-cols-[18rem] gap-3 pb-4">
+          {isLoading ? (
+            <>
+              {Array.from({ length: skeletonCount }).map((_, i) => (
+                <SkeletonCard key={`similar-skeleton-${i}`} />
+              ))}
+            </>
+          ) : (
+            similarClubs?.map((club) => (
+              <ClubRecommendationCard
+                key={club.id}
+                club={{ ...club, imageUrl: club.imageUrl ?? undefined }}
+                variant="compact"
+              />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

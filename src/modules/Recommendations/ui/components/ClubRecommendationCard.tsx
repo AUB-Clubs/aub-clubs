@@ -80,21 +80,21 @@ export function ClubRecommendationCard({ club, variant = 'grid' }: ClubRecommend
   if (variant === 'compact') {
     return (
       <Link href={`/clubs/${club.id}`}>
-        <Card className="w-[200px] flex-shrink-0 hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="p-4 space-y-3">
+        <Card className="w-full hover:shadow-md transition-shadow cursor-pointer">
+          <CardContent className="p-3 space-y-2.5">
             <div className="flex justify-center">
-              <Avatar className="h-12 w-12">
+              <Avatar className="h-10 w-10">
                 <AvatarImage src={club.imageUrl} alt={club.title} />
                 <AvatarFallback>{getClubInitials(club.title)}</AvatarFallback>
               </Avatar>
             </div>
             
-            <div className="text-center space-y-2">
-              <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem]">
+            <div className="text-center space-y-1.5">
+              <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.25rem] leading-tight">
                 {club.title}
               </h3>
               
-              <div className="flex flex-wrap gap-1 justify-center min-h-[1.5rem]">
+              <div className="flex flex-wrap gap-1 justify-center min-h-[1.25rem]">
                 {club.types.slice(0, 2).map((type) => (
                   <Badge key={type} variant="secondary" className="text-xs px-1.5 py-0">
                     {formatTypeLabel(type)}

@@ -368,10 +368,10 @@ export const clubsRouter = createTRPCRouter({
               message: `Your post violates community guidelines and contains ${reason}. Please revise it.`,
             });
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is down.
           if (error instanceof TRPCError) throw error;
-          console.error("AI Moderation Warning: Failed to reach HuggingFace API. Post allowed by default. " + error);
+          console.error("AI Moderation Warning: Failed to reach HuggingFace API. Post allowed by default. " + String(error));
         }
       }
 
@@ -505,5 +505,58 @@ export const clubsRouter = createTRPCRouter({
         totalCount,
         totalPages: Math.ceil(totalCount / limit),
       };
+    }),
+
+  // Get popular clubs (fallback for recommendations)
+  getPopularClubs: baseProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(20).default(6),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { limit } = input;
+      const userId = ctx.userId;
+
+      // Get user's joined club IDs to exclude them
+      const userMemberships = await prisma.membership.findMany({
+        where: {
+          userId,
+          status: "ACCEPTED",
+        },
+        select: { clubId: true },
+      });
+      const joinedClubIds = userMemberships.map((m) => m.clubId);
+
+      // Query clubs by member count (popularity)
+      const clubs = await prisma.club.findMany({
+        where: {
+          id: { notIn: joinedClubIds },
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          types: true,
+          _count: {
+            select: { memberships: true },
+          },
+        },
+        orderBy: {
+          memberships: { _count: 'desc' },
+        },
+        take: limit,
+      });
+
+      return clubs.map((club) => ({
+        id: club.id,
+        title: club.title,
+        description: club.description,
+        imageUrl: club.imageUrl,
+        types: club.types,
+        memberCount: club._count.memberships,
+        score: 0, // No scoring for popular clubs
+      }));
     }),
 })

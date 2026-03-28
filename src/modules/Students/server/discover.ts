@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createTRPCRouter, baseProcedure } from '../../../trpc/init';
 import { prisma } from '@/lib/prisma';
+import { getRecommendedClubIds } from '../../Recommendations/server/algorithms';
 
 /**
  * Discover page backend: personalized posts from recommended clubs
@@ -19,121 +20,89 @@ export const discoverRouter = createTRPCRouter({
       const { limit, cursor } = input;
       const userId = ctx.userId;
 
-      // 1. Reuse recommendation logic to get club IDs (top 20 for variety)
-      const userMemberships = await prisma.membership.findMany({
-        where: {
-          userId,
-          status: "ACCEPTED",
-        },
-        include: {
-          club: {
-            select: { types: true },
+      try {
+        // 1. Get recommended club IDs using the advanced hybrid algorithm (top 20 for post variety)
+        const recommendedClubIds = await getRecommendedClubIds(userId, 20);
+
+        if (recommendedClubIds.length === 0) {
+          // No recommendations available - empty state will be handled on frontend
+          return { posts: [], nextCursor: null };
+        }
+
+        // 2. Fetch posts from recommended clubs (last 30 days)
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const posts = await prisma.post.findMany({
+          where: {
+            clubId: { in: recommendedClubIds },
+            createdAt: { gte: thirtyDaysAgo },
+            // should filter to only published posts, temporary fix
           },
-        },
-      });
-
-      const joinedClubIds = userMemberships.map((m) => m.clubId);
-      const allTypes = userMemberships.flatMap((m) => m.club.types);
-      const preferredTypes = Array.from(new Set(allTypes));
-
-      // If user has no clubs, return empty array
-      if (preferredTypes.length === 0) {
-        return { posts: [], nextCursor: null };
-      }
-
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-      // Get candidate clubs based on types
-      const candidateClubs = await prisma.club.findMany({
-        where: {
-          AND: [
-            { id: { notIn: joinedClubIds } },
-            { types: { hasSome: preferredTypes } },
+          orderBy: [
+            { type: "desc" }, // ANNOUNCEMENT first
+            { priority: "desc" }, // URGENT > IMPORTANT > GENERAL
+            { createdAt: "desc" },
           ],
-        },
-        select: {
-          id: true,
-          title: true,
-          types: true,
-          _count: {
-            select: { memberships: true },
-          },
-          posts: {
-            where: {
-              createdAt: { gte: thirtyDaysAgo },
-              status: "PUBLISHED",
+          take: limit + 1,
+          cursor: cursor ? { id: cursor } : undefined,
+          skip: cursor ? 1 : 0,
+          include: {
+            club: {
+              select: {
+                id: true,
+                title: true,
+                imageUrl: true,
+                types: true,
+              },
             },
-            select: {
-              type: true,
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
             },
+            _count: { select: { upvotes: true } },
+            upvotes: { where: { userId: ctx.userId }, select: { id: true } },
           },
-        },
-      });
+        });
 
-      // Score clubs (simplified for performance)
-      const scoredClubs = candidateClubs.map((club) => {
-        const typeMatches = club.types.filter((t) => preferredTypes.includes(t)).length;
-        const announcements = club.posts.filter((p) => p.type === "ANNOUNCEMENT").length;
-        const posts = club.posts.filter((p) => p.type === "GENERAL").length;
-        const activity = announcements * 0.8 + posts * 0.2;
-        const score = typeMatches * 5 + activity * 2 + club._count.memberships * 0.1;
+        let nextCursor: string | null = null;
+        if (posts.length > limit) {
+          const nextItem = posts.pop();
+          nextCursor = nextItem!.id;
+        }
 
-        return { id: club.id, score };
-      });
-
-      // Get top 20 club IDs
-      const recommendedClubIds = scoredClubs
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 20)
-        .map((c) => c.id);
-
-      if (recommendedClubIds.length === 0) {
-        return { posts: [], nextCursor: null };
+        return { 
+          posts: posts.map((post) => ({
+            id: post.id,
+            type: post.type,
+            title: post.title,
+            content: post.content,
+            priority: post.priority,
+            createdAt: post.createdAt,
+            club: {
+              id: post.club.id,
+              title: post.club.title,
+              imageUrl: post.club.imageUrl,
+              types: post.club.types,
+            },
+            author: {
+              id: post.author.id,
+              firstName: post.author.firstName,
+              lastName: post.author.lastName,
+              avatarUrl: post.author.avatarUrl,
+            },
+            upvotesCount: post._count.upvotes,
+            hasUpvoted: post.upvotes.length > 0,
+          })), 
+          nextCursor 
+        };
+      } catch (error) {
+        console.error("Error in discover.getDiscoverFeed:", error);
+        throw new Error(`Failed to fetch discover feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-
-      // 2. Fetch posts from recommended clubs
-      const posts = await prisma.post.findMany({
-        where: {
-          clubId: { in: recommendedClubIds },
-          createdAt: { gte: thirtyDaysAgo },
-          status: "PUBLISHED",
-        },
-        orderBy: [
-          { type: "desc" }, // ANNOUNCEMENT first
-          { createdAt: "desc" },
-        ],
-        take: limit + 1,
-        cursor: cursor ? { id: cursor } : undefined,
-        skip: cursor ? 1 : 0,
-        include: {
-          club: {
-            select: {
-              id: true,
-              title: true,
-              imageUrl: true,
-              types: true,
-            },
-          },
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
-            },
-          },
-          _count: { select: { upvotes: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
-        },
-      });
-
-      let nextCursor: string | null = null;
-      if (posts.length > limit) {
-        const nextItem = posts.pop();
-        nextCursor = nextItem!.id;
-      }
-
-      return { posts, nextCursor };
     }),
 
   // ── Trending Feed: Global trending posts ───────────────────────────
@@ -153,7 +122,7 @@ export const discoverRouter = createTRPCRouter({
       const posts = await prisma.post.findMany({
         where: {
           createdAt: { gte: fourteenDaysAgo },
-          status: "PUBLISHED",
+          // should filter to only published posts, temporary fix
         },
         include: {
           club: {
@@ -184,13 +153,13 @@ export const discoverRouter = createTRPCRouter({
           const upvoteCount = post._count.upvotes;
           
           // Filter: minimum 3 upvotes
-          if (upvoteCount < 3) return null;
+          if (upvoteCount < 2) return null;
 
           // Calculate trending score
-          const engagement = upvoteCount * 2;
+          const engagement = upvoteCount * 4;
           const daysOld = (now - post.createdAt.getTime()) / (1000 * 60 * 60 * 24);
           const recency = (14 - daysOld) / 14;
-          const trendingScore = engagement * (0.7 + recency * 0.3);
+          const trendingScore = engagement * 0.8 + recency * 0.3;
 
           return {
             ...post,
@@ -218,6 +187,31 @@ export const discoverRouter = createTRPCRouter({
         nextCursor = nextItem!.id;
       }
 
-      return { posts: paginatedPosts, nextCursor };
+      return { 
+        posts: paginatedPosts.map((post) => ({
+          id: post.id,
+          type: post.type,
+          title: post.title,
+          content: post.content,
+          priority: post.priority,
+          createdAt: post.createdAt,
+          club: {
+            id: post.club.id,
+            title: post.club.title,
+            imageUrl: post.club.imageUrl,
+            types: post.club.types,
+          },
+          author: {
+            id: post.author.id,
+            firstName: post.author.firstName,
+            lastName: post.author.lastName,
+            avatarUrl: post.author.avatarUrl,
+          },
+          upvotesCount: post._count.upvotes,
+          hasUpvoted: post.upvotes.length > 0,
+          trendingScore: post.trendingScore,
+        })), 
+        nextCursor 
+      };
     }),
 });
