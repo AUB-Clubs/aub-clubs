@@ -22,79 +22,100 @@ export const forYouRouter = createTRPCRouter({
       const cursor = input?.cursor;
       const filter = input?.filter ?? 'ALL';
 
-      // Get club ids the current user is registered in
-      const memberships = await prisma.membership.findMany({
-        where: { userId: ctx.userId },
-        select: { clubId: true },
-      });
-      const clubIds = memberships.map((m) => m.clubId);
+      try {
+        // Verify user exists first
+        const user = await prisma.user.findUnique({
+          where: { id: ctx.userId },
+          select: { id: true }
+        });
 
-      if (clubIds.length === 0) {
-        return { items: [], nextCursor: null };
-      }
-      
-      const posts = await prisma.post.findMany({
-        where: {
-           clubId: { in: clubIds },
-           ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
-        },
-        orderBy: { createdAt: 'desc' },
-        take: limit + 1,
-        cursor: cursor ? { id: cursor } : undefined,
-        skip: cursor ? 1 : 0,
-        include: {
-          club: {
-            select: { id: true, title: true, crn: true, imageUrl: true },
+        if (!user) {
+          console.error(`User with ID ${ctx.userId} not found in database`);
+          return { items: [], nextCursor: null };
+        }
+
+        // Get club ids the current user is registered in
+        const memberships = await prisma.membership.findMany({
+          where: { userId: ctx.userId },
+          select: { clubId: true },
+        });
+        const clubIds = memberships.map((m) => m.clubId);
+
+        if (clubIds.length === 0) {
+          return { items: [], nextCursor: null };
+        }
+
+        const posts = await prisma.post.findMany({
+          where: {
+            clubId: { in: clubIds },
+            ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
           },
-          author: {
-             select: {
+          orderBy: [
+            { type: "desc" }, // announcements first
+            { priority: "desc" }, // URGENT > IMPORTANT > GENERAL
+            { createdAt: "desc" }
+          ],
+          take: limit + 1,
+          cursor: cursor ? { id: cursor } : undefined,
+          skip: cursor ? 1 : 0,
+          include: {
+            club: {
+              select: { id: true, title: true, crn: true, imageUrl: true },
+            },
+            author: {
+              select: {
                 id: true,
                 firstName: true,
                 lastName: true,
                 avatarUrl: true,
-             }
+              }
+            },
+            _count: { select: { upvotes: true } },
+            upvotes: { where: { userId: ctx.userId }, select: { id: true } },
           },
-          _count: { select: { upvotes: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
-        },
-      });
+        });
 
-      let nextCursor: typeof cursor | null = null;
-      if (posts.length > limit) {
-        const nextItem = posts.pop();
-        nextCursor = nextItem!.id;
-      }
+        let nextCursor: typeof cursor | null = null;
+        if (posts.length > limit) {
+          const nextItem = posts.pop();
+          nextCursor = nextItem!.id;
+        }
 
-      const items = posts.map((p) => ({
-        type: p.type === 'ANNOUNCEMENT' ? 'announcement' : 'post',
-        id: p.id,
-        created_at: p.createdAt,
-        data: {
-          ...p,
+        const items = posts.map((p) => ({
+          type: p.type === 'ANNOUNCEMENT' ? 'announcement' : 'post',
+          id: p.id,
           created_at: p.createdAt,
-          club: {
-            id: p.club.id,
-            Title: p.club.title,
-            CRN: p.club.crn,
-            image: p.club.imageUrl,
+          data: {
+            ...p,
+            created_at: p.createdAt,
+            club: {
+              id: p.club.id,
+              Title: p.club.title,
+              CRN: p.club.crn,
+              image: p.club.imageUrl,
+            },
+            author: {
+              id: p.author.id,
+              first_name: p.author.firstName,
+              last_name: p.author.lastName,
+              avatar_url: p.author.avatarUrl,
+            },
+            upvotes_count: p._count.upvotes,
+            has_upvoted: p.upvotes.length > 0,
+            priority: p.priority
           },
-          author: {
-            id: p.author.id,
-            first_name: p.author.firstName,
-            last_name: p.author.lastName,
-            avatar_url: p.author.avatarUrl,
-          },
-          upvotes_count: p._count.upvotes,
-          has_upvoted: p.upvotes.length > 0,
-        },
-      }));
-      
-      // Sort is handled by DB order by
-      // Cursor pagination is handled by DB
+        }));
 
-      return {
-        items, // TS will infer the union type from the map
-        nextCursor,
-      };
+        // Sort is handled by DB order by
+        // Cursor pagination is handled by DB
+
+        return {
+          items, // TS will infer the union type from the map
+          nextCursor,
+        };
+      } catch (error) {
+        console.error('Error in forYou.getFeed:', error);
+        throw new Error(`Failed to fetch feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     }),
 });
