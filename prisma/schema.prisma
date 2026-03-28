@@ -43,6 +43,12 @@ enum PostType {
   GENERAL
 }
 
+enum AnnouncementPriority {
+  GENERAL
+  IMPORTANT
+  URGENT
+}
+
 enum PostStatus {
   DRAFT
   PUBLISHED
@@ -172,6 +178,9 @@ model Post {
   
   createdAt  DateTime     @default(now()) @map("created_at")
   updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  // Sprint 3 Addition
+  priority AnnouncementPriority @default(GENERAL)
 
   // Foreign Keys
   authorId   String       @map("author_id")
