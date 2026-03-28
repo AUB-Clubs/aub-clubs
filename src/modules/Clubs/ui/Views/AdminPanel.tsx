@@ -55,6 +55,8 @@ import {
   X,
   Plus,
   ArrowLeft,
+  Calendar,
+  BarChart,
 } from 'lucide-react'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -95,12 +97,15 @@ function formatDate(iso: string) {
 
 // ── Main Component ───────────────────────────────────────────────────
 
+import { EventsSection } from '../components/AdminEventsSection'
+import { AnalyticsSection } from '../components/AdminAnalyticsSection'
+
 export interface AdminPanelProps {
   clubId: string
 }
 
 export default function AdminPanel({ clubId }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | null>(null)
+  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | null>(null)
 
   // Auth check: only president / vice can access
   const membershipQuery = trpc.clubs.getMembership.useQuery(
@@ -173,7 +178,11 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
                     ? 'Join Requests'
                     : activeSection === 'announcements'
                       ? 'Announcements'
-                      : 'Admin Panel'}
+                      : activeSection === 'events'
+                        ? 'Events'
+                        : activeSection === 'analytics'
+                          ? 'Analytics'
+                          : 'Admin Panel'}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {activeSection
@@ -189,7 +198,7 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
 
         {/* Section Cards (home) */}
         {!activeSection && (
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <button
               onClick={() => setActiveSection('members')}
               className="group text-left"
@@ -246,6 +255,44 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
                 </CardContent>
               </Card>
             </button>
+
+            <button
+              onClick={() => setActiveSection('events')}
+              className="group text-left"
+            >
+              <Card className="h-full rounded-2xl border-0 bg-card/80 shadow-sm ring-1 ring-border/50 transition-all hover:shadow-md hover:ring-indigo-500/30 cursor-pointer">
+                <CardContent className="flex flex-col items-start gap-3 pt-6">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 transition-colors group-hover:bg-indigo-500/20">
+                    <Calendar className="size-6 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Events</p>
+                    <p className="text-sm text-muted-foreground">
+                      Manage events and attendance
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('analytics')}
+              className="group text-left"
+            >
+              <Card className="h-full rounded-2xl border-0 bg-card/80 shadow-sm ring-1 ring-border/50 transition-all hover:shadow-md hover:ring-rose-500/30 cursor-pointer">
+                <CardContent className="flex flex-col items-start gap-3 pt-6">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-rose-500/10 transition-colors group-hover:bg-rose-500/20">
+                    <BarChart className="size-6 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Analytics</p>
+                    <p className="text-sm text-muted-foreground">
+                      View and export club reports
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
           </div>
         )}
 
@@ -258,6 +305,12 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
         )}
         {activeSection === 'announcements' && (
           <AnnouncementsSection clubId={clubId} />
+        )}
+        {activeSection === 'events' && (
+          <EventsSection clubId={clubId} />
+        )}
+        {activeSection === 'analytics' && (
+          <AnalyticsSection clubId={clubId} />
         )}
       </div>
     </div>
