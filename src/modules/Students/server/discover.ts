@@ -29,14 +29,10 @@ export const discoverRouter = createTRPCRouter({
           return { posts: [], nextCursor: null };
         }
 
-        // 2. Fetch posts from recommended clubs (last 30 days)
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
+        // 2. Fetch posts from recommended clubs (all posts for better scrolling experience)
         const posts = await prisma.post.findMany({
           where: {
             clubId: { in: recommendedClubIds },
-            createdAt: { gte: thirtyDaysAgo },
-            // should filter to only published posts, temporary fix
           },
           orderBy: [
             { type: "desc" }, // ANNOUNCEMENT first
@@ -116,13 +112,12 @@ export const discoverRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { limit, cursor } = input;
 
-      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-      // Fetch posts from last 14 days with upvote counts
+      // Fetch posts from last 30 days (including unpublished for now)
       const posts = await prisma.post.findMany({
         where: {
-          createdAt: { gte: fourteenDaysAgo },
-          // should filter to only published posts, temporary fix
+          createdAt: { gte: thirtyDaysAgo },
         },
         include: {
           club: {
@@ -156,10 +151,10 @@ export const discoverRouter = createTRPCRouter({
           if (upvoteCount < 2) return null;
 
           // Calculate trending score
-          const engagement = upvoteCount * 4;
+          const engagement = upvoteCount * 2;
           const daysOld = (now - post.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-          const recency = (14 - daysOld) / 14;
-          const trendingScore = engagement * 0.8 + recency * 0.3;
+          const recency = Math.max(0, (30 - daysOld) / 30);
+          const trendingScore = engagement * (0.7 + recency * 0.3);
 
           return {
             ...post,
