@@ -67,7 +67,6 @@ export async function getRecommendedClubIds(
       posts: {
         where: {
           createdAt: { gte: thirtyDaysAgo },
-          // should filter to only published posts, temporary fix
         },
         select: {
           type: true,
@@ -213,7 +212,6 @@ export async function getRecommendedClubsWithDetails(
       posts: {
         where: {
           createdAt: { gte: thirtyDaysAgo },
-          // status: "PUBLISHED",
         },
         select: {
           type: true,
