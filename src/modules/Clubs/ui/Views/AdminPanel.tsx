@@ -83,6 +83,12 @@ const AUDIENCE_LABELS: Record<string, string> = {
   BOARD_ONLY: 'Board Only',
 }
 
+const ANNOUNCEMENT_PRIORITY_LABELS: Record<string, string> = {
+  GENERAL: 'Normal',
+  IMPORTANT: 'Important',
+  URGENT: 'Urgent',
+}
+
 function getInitials(firstName?: string | null, lastName?: string | null) {
   return [firstName?.[0], lastName?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 }
@@ -787,7 +793,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="GENERAL">General</SelectItem>
+                    <SelectItem value="GENERAL">Normal</SelectItem>
                     <SelectItem value="IMPORTANT">Important</SelectItem>
                     <SelectItem value="URGENT">Urgent</SelectItem>
                   </SelectContent>
@@ -860,7 +866,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                       }
                       className="text-xs"
                     >
-                      {a.priority}
+                      {ANNOUNCEMENT_PRIORITY_LABELS[a.priority] ?? a.priority}
                     </Badge>
                   </div>
                   {a.status === 'DRAFT' && (

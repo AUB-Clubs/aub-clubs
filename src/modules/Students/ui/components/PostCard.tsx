@@ -185,7 +185,7 @@ export function PostCard({ post, variant = 'default', showJoinButton = false, on
                       ? 'Urgent'
                       : post.priority === 'IMPORTANT'
                       ? 'Important'
-                      : 'Announcement'}
+                      : 'Normal'}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="gap-1 text-xs font-normal">
