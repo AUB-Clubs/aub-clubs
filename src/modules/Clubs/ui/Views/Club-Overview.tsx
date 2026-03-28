@@ -119,6 +119,7 @@ interface ClubAnnouncement {
   id: string
   title: string
   content: string
+  priority: 'GENERAL' | 'IMPORTANT' | 'URGENT'
   createdAt: string
   pinnedAt: string | null
   author: string
@@ -742,11 +743,21 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                             <CardHeader className="pb-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge
-                                  variant="secondary"
+                                  variant={
+                                    announcement.priority === 'URGENT'
+                                      ? 'destructive'
+                                      : announcement.priority === 'IMPORTANT'
+                                        ? 'default'
+                                        : 'secondary'
+                                  }
                                   className="gap-1 text-xs font-normal"
                                 >
                                   <Megaphone className="size-3" />
-                                  Announcement
+                                  {announcement.priority === 'URGENT'
+                                    ? 'Urgent'
+                                    : announcement.priority === 'IMPORTANT'
+                                      ? 'Important'
+                                      : 'Normal'}
                                 </Badge>
                                 {announcement.pinnedAt && (
                                   <Badge variant="outline" className="text-xs font-semibold">

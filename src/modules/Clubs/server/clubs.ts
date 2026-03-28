@@ -221,6 +221,7 @@ export const clubsRouter = createTRPCRouter({
         where: { clubId, type: "ANNOUNCEMENT", status: "PUBLISHED", audience: "PUBLIC" },
         orderBy: [
           { pinnedAt: "desc" },
+          { priority: "desc" },
           { createdAt: "desc" },
         ],
         take: limit + 1,
@@ -244,6 +245,7 @@ export const clubsRouter = createTRPCRouter({
           id: p.id,
           title: p.title,
           content: p.content,
+          priority: p.priority,
           createdAt: p.createdAt.toISOString(),
           pinnedAt: p.pinnedAt?.toISOString() ?? null,
           author: `${p.author.firstName} ${p.author.lastName}`,

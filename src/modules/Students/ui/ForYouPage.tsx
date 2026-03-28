@@ -200,7 +200,7 @@ export default function ForYouPage() {
                                     ? "Urgent"
                                     : a.priority === "IMPORTANT"
                                     ? "Important"
-                                    : "Announcement"}
+                                    : "Normal"}
                                 </Badge>
                               </div>
                             </div>
