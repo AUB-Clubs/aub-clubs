@@ -93,6 +93,14 @@ async def moderate(request: ModerationRequest):
 
             # Run moderation
             image_results = image_moderator(pil_image)
+
+            # Map LABEL_X to actual label names (timm model uses pretrained_cfg)
+            label_map = {"LABEL_0": "NSFL", "LABEL_1": "NSFW", "LABEL_2": "SFW"}
+            image_results = [
+                {**result, "label": label_map.get(result["label"], result["label"])}
+                for result in image_results
+            ]
+
             results["image_flags"] = image_results
             logger.info(f"Image moderation complete - found {len(image_results)} flags")
 
