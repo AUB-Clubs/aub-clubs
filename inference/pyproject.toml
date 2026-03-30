@@ -9,17 +9,21 @@ dependencies = [
     "pydantic>=2.10.0",
     "transformers>=4.47.0",
     "pillow>=11.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=8.3.0",
     "httpx>=0.28.0",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
-[tool.uv]
-dev-dependencies = []
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
