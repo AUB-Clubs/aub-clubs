@@ -1,18 +1,20 @@
 import { z } from "zod";
 import { createTRPCRouter, baseProcedure } from "@/trpc/init";
-import { TRPCError } from "@trpc/server";
-
-const INFERENCE_URL = process.env.INFERENCE_URL || "http://localhost:8080";
+import { moderateText, moderateImage, moderateBoth } from "./moderation";
 
 // Input validation schemas
 const moderateTextSchema = z.object({
   text: z.string().min(1).max(10000),
+  throwOnUnsafe: z.boolean().optional().default(false),
+  textThreshold: z.number().min(0).max(1).optional(),
 });
 
 const moderateImageSchema = z.object({
   base64Image: z
     .string()
     .max(10 * 1024 * 1024, "Image too large (max 10MB)"),
+  throwOnUnsafe: z.boolean().optional().default(false),
+  imageThreshold: z.number().min(0).max(1).optional(),
 });
 
 const moderateBothSchema = z.object({
@@ -20,66 +22,37 @@ const moderateBothSchema = z.object({
   base64Image: z
     .string()
     .max(10 * 1024 * 1024, "Image too large (max 10MB)"),
+  throwOnUnsafe: z.boolean().optional().default(false),
+  textThreshold: z.number().min(0).max(1).optional(),
+  imageThreshold: z.number().min(0).max(1).optional(),
 });
-
-// Helper to strip data URI prefix
-const cleanBase64 = (base64: string): string => {
-  return base64.replace(/^data:image\/[a-z]+;base64,/, "");
-};
-
-// Helper to call inference service
-const callInferenceService = async (payload: {
-  text?: string;
-  image?: string;
-}): Promise<{
-  text_flags?: Array<{ label: string; score: number }>;
-  image_flags?: Array<{ label: string; score: number }>;
-}> => {
-  try {
-    const response = await fetch(`${INFERENCE_URL}/moderate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30000), // 30s timeout
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Inference service returned ${response.status}: ${errorText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.warn("Moderation service unavailable:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Moderation service is currently unavailable",
-      cause: error,
-    });
-  }
-};
 
 export const moderationRouter = createTRPCRouter({
   moderateText: baseProcedure
     .input(moderateTextSchema)
     .mutation(async ({ input }) => {
-      return await callInferenceService({ text: input.text });
+      return await moderateText(input.text, {
+        throwOnUnsafe: input.throwOnUnsafe,
+        textThreshold: input.textThreshold,
+      });
     }),
 
   moderateImage: baseProcedure
     .input(moderateImageSchema)
     .mutation(async ({ input }) => {
-      const cleanedBase64 = cleanBase64(input.base64Image);
-      return await callInferenceService({ image: cleanedBase64 });
+      return await moderateImage(input.base64Image, {
+        throwOnUnsafe: input.throwOnUnsafe,
+        imageThreshold: input.imageThreshold,
+      });
     }),
 
   moderateBoth: baseProcedure
     .input(moderateBothSchema)
     .mutation(async ({ input }) => {
-      const cleanedBase64 = cleanBase64(input.base64Image);
-      return await callInferenceService({
-        text: input.text,
-        image: cleanedBase64,
+      return await moderateBoth(input.text, input.base64Image, {
+        throwOnUnsafe: input.throwOnUnsafe,
+        textThreshold: input.textThreshold,
+        imageThreshold: input.imageThreshold,
       });
     }),
 });

@@ -2,7 +2,7 @@ import { z } from "zod"
 import { createTRPCRouter } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
-import { HfInference } from "@huggingface/inference"
+import { moderateText } from "@/modules/moderation/server/moderation"
 import { memberManagementRouter } from "./member-management"
 import { eventsRouter } from "./events"
 import { analyticsRouter } from "./analytics"
@@ -312,70 +312,26 @@ export const clubsRouter = createTRPCRouter({
         })
       }
 
-      // Hugging Face AI Moderation Check (KoalaAI/Text-Moderation)
-      if (process.env.HF_TOKEN) {
-        try {
-          const hf = new HfInference(process.env.HF_TOKEN);
-          // We verify both the title and content
-          const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
-          
-          const response = await hf.textClassification({
-            model: "KoalaAI/Text-Moderation",
-            inputs: textToCheck,
-          });
-
-          // Console log the result to debug/audit responses
-          console.log("AI Moderation Result:", response);
-
-          // The model returns an array of label objects. Usually 'OK' is the top score if it's safe.
-          // Since the model outputs multiple labels, we check the probability of 'OK' vs others.
-          const topResult = response[0];
-          
-          // Let's be explicit and define the unsafe categories based on KoalaAI/Text-Moderation
-          const unsafeLabels = ["S", "H", "V", "HR", "SH", "S3", "H2", "V2"];
-          
-          // If the model is not at least 95% confident it's OK, OR if an unsafe label scores higher than very low threshold
-          let isUnsafe = false;
-          let offendingLabel = topResult.label;
-
-          if (topResult.label === "OK" && topResult.score < 0.95) {
-             isUnsafe = true;
-             // Find the next highest unsafe label to explain why
-             const nextHighest = response.find(r => unsafeLabels.includes(r.label));
-             if (nextHighest) offendingLabel = nextHighest.label;
-          } else if (unsafeLabels.includes(topResult.label) && topResult.score > 0.05) {
-             isUnsafe = true;
-          }
-
-          if (isUnsafe) {
-            let reason = "inappropriate language";
-            
-            // Map the label to a friendly reason string
-            const reasonMap: Record<string, string> = {
-              "S": "sexual content",
-              "H": "hate speech",
-              "V": "violence",
-              "HR": "harassment",
-              "SH": "self-harm promotion",
-              "S3": "sexual content involving minors",
-              "H2": "threatening hate speech",
-              "V2": "graphic violence"
-            };
-            
-            if (reasonMap[offendingLabel]) {
-               reason = reasonMap[offendingLabel] as string;
-            }
-
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Your post violates community guidelines and contains ${reason}. Please revise it.`,
-            });
-          }
-        } catch (error: unknown) {
-          // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is down.
-          if (error instanceof TRPCError) throw error;
-          console.error("AI Moderation Warning: Failed to reach HuggingFace API. Post allowed by default. " + String(error));
+      // Content Moderation Check using in-house inference service
+      try {
+        const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
+        
+        // Use our in-house moderation API (will throw if content is unsafe or service unavailable)
+        await moderateText(textToCheck, {
+          throwOnUnsafe: true,
+          textThreshold: 0.05,
+        });
+      } catch (error: unknown) {
+        // If it's a TRPC error (content violation or service error), re-throw it
+        if (error instanceof TRPCError) {
+          throw error;
         }
+        // Log unexpected errors and reject content for safety
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify content safety. Please try again later.",
+        });
       }
 
       const post = await prisma.post.create({
