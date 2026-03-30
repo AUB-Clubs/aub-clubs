@@ -7,6 +7,7 @@ import { commitmentLevelRouter } from '../../modules/Clubs/server/commitmentLeve
 import { recommendationsRouter } from '../../modules/Recommendations/server/router';
 import { authRouter } from '../../modules/auth/server/router';
 import { onboardingRouter } from '../../modules/onboarding/server/router';
+import { moderationRouter } from '../../modules/moderation/server/router';
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -17,6 +18,7 @@ export const appRouter = createTRPCRouter({
   clubs: clubsRouter,
   commitmentLevel: commitmentLevelRouter,
   recommendations: recommendationsRouter,
+  moderation: moderationRouter,
 });
 
 export type AppRouter = typeof appRouter;

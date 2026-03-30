@@ -28,6 +28,21 @@ try {
   process.exit(1);
 }
 
+// Update inference config
+const inferenceConfigPath = path.join(__dirname, `../deployment/kluctl/services/inference/config/${envName}.yaml`);
+
+const inferenceConfigContent = `inferenceNode:
+  version: ${newTag}
+`;
+
+try {
+  fs.writeFileSync(inferenceConfigPath, inferenceConfigContent);
+  console.log(`Updated ${inferenceConfigPath} with version: ${newTag}`);
+} catch (error) {
+  console.error(`Error updating ${inferenceConfigPath}:`, error);
+  process.exit(1);
+}
+
 // Update seed job
 const seedJobPath = path.join(__dirname, '../deployment/kluctl/manual/Job.db-seeding.yaml');
 
