@@ -39,13 +39,16 @@ export function ForgotPasswordDialog() {
     },
   });
 
-  async function onSubmit(values: ResetPasswordEmailInput) {
+  async function onSubmit(values: ResetPasswordEmailInput, event?: React.BaseSyntheticEvent) {
+    // Prevent event from bubbling to parent form (sign-in form)
+    event?.preventDefault();
+    event?.stopPropagation();
+    
     setIsLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      // Email template will handle the redirect URL
+      const { error } = await supabase.auth.resetPasswordForEmail(values.email);
 
       if (error) {
         toast.error(error.message);
@@ -102,7 +105,14 @@ export function ForgotPasswordDialog() {
           </div>
         ) : (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                form.handleSubmit(onSubmit)(e);
+              }} 
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="email"
