@@ -42,6 +42,8 @@ jobs:
             dockerfile: Dockerfile.migrate
           - image: hamzarach69/aub-clubs-seed
             dockerfile: Dockerfile.seed
+          - image: hamzarach69/aub-clubs-inference
+            dockerfile: inference/Dockerfile
 
     steps:
       - name: Checkout
