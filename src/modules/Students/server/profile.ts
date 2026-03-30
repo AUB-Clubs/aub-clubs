@@ -119,4 +119,29 @@ export const profileRouter = createTRPCRouter({
         totalPages: Math.ceil(totalCount / limit),
       };
     }),
+
+  /**
+   * Update avatar URL
+   * Dedicated endpoint for profile picture updates
+   */
+  updateAvatar: protectedProcedure
+    .input(
+      z.object({
+        avatarUrl: z.string().url().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.id;
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          avatarUrl: input.avatarUrl,
+        },
+        select: {
+          id: true,
+          avatarUrl: true,
+        },
+      });
+      return updated;
+    }),
 });
