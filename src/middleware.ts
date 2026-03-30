@@ -49,10 +49,11 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired - required for Server Components
+  // Get authenticated user - use getUser() for security
+  // This authenticates the data by contacting the Supabase Auth server
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // ─────────────────────────────────────────────────────────────────────
   // PUBLIC ROUTES: Allow without authentication
@@ -63,7 +64,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/reset-password")
   ) {
     // If user is fully authenticated and tries to access auth pages, redirect to /me
-    if (session && pathname.startsWith("/auth")) {
+    if (user && pathname.startsWith("/auth")) {
       // Check if there's a verify query param - if so, let them through to see verification notice
       const verifyParam = request.nextUrl.searchParams.get("verify");
       if (!verifyParam) {
@@ -80,7 +81,7 @@ export async function middleware(request: NextRequest) {
   // ─────────────────────────────────────────────────────────────────────
 
   // Not authenticated → redirect to /auth
-  if (!session) {
+  if (!user) {
     const redirectUrl = new URL("/auth", request.url);
     return NextResponse.redirect(redirectUrl);
   }

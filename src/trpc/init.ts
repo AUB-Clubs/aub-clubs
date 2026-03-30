@@ -8,11 +8,14 @@ export const createTRPCContext = cache(async () => {
    * @see: https://trpc.io/docs/server/context
    */
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  
+  // Use getUser() instead of getSession() for security
+  // This authenticates the data by contacting the Supabase Auth server
+  const { data: { user } } = await supabase.auth.getUser();
   
   return { 
-    userId: session?.user?.id ?? null,
-    session,
+    userId: user?.id ?? null,
+    user,
   };
 });
 

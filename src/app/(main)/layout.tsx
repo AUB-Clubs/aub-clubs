@@ -9,18 +9,20 @@ export default async function MainLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+  
+  // Use getUser() instead of getSession() for security
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
 
   // Not authenticated → redirect to /auth
-  if (!session) {
+  if (!authUser) {
     redirect("/auth");
   }
 
   // Get user from DB
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: authUser.id },
     select: {
       emailVerified: true,
       onboardingCompleted: true,
@@ -34,6 +36,10 @@ export default async function MainLayout({
 
   // Email not verified → redirect to /auth with verify param
   if (!user.emailVerified) {
+    if (authUser.email) {
+      redirect(`/auth?verify=true&email=${encodeURIComponent(authUser.email)}`);
+    }
+
     redirect("/auth?verify=true");
   }
 

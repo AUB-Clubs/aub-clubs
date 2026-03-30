@@ -42,10 +42,12 @@ export function AppSidebar() {
   async function handleSignOut() {
     try {
       const supabase = createClient();
-      await supabase.auth.signOut();
-      await utils.invalidate();
-      toast.success("Signed out successfully");
+      // Redirect immediately for better UX, then clean up
       router.push("/");
+      toast.success("Signed out successfully");
+      // Sign out and invalidate in background
+      supabase.auth.signOut();
+      utils.invalidate();
     } catch {
       toast.error("Failed to sign out");
     }

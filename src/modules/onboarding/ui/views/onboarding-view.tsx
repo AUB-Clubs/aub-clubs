@@ -105,9 +105,11 @@ export function OnboardingView({ userId, initialData }: OnboardingViewProps) {
 
   async function handleSignOut() {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    await utils.invalidate();
+    // Redirect immediately for better UX
     router.push("/");
+    // Sign out and invalidate in background
+    supabase.auth.signOut();
+    utils.invalidate();
   }
 
   return (

@@ -26,6 +26,7 @@ export function SignInForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const utils = trpc.useUtils();
+  const markVerifiedMutation = trpc.auth.markEmailVerified.useMutation();
 
   const form = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
@@ -54,6 +55,18 @@ export function SignInForm() {
         return;
       }
 
+      // Check Supabase email verification status (source of truth)
+      const isEmailVerified = !!data.user.email_confirmed_at;
+
+      // If email is verified in Supabase but not in our DB, update it
+      if (isEmailVerified) {
+        try {
+          await markVerifiedMutation.mutateAsync();
+        } catch {
+          // Ignore error - will be synced later
+        }
+      }
+
       // Invalidate queries and check user status
       await utils.invalidate();
       const status = await utils.auth.getStatus.fetch();
@@ -63,9 +76,9 @@ export function SignInForm() {
         return;
       }
 
-      if (!status.emailVerified) {
-        // Will show verification notice
-        router.push("/auth?verify=true");
+      if (!isEmailVerified) {
+        sessionStorage.setItem("verification_email", values.email);
+        router.push(`/auth?verify=true&email=${encodeURIComponent(values.email)}`);
         return;
       }
 
@@ -76,7 +89,7 @@ export function SignInForm() {
 
       toast.success("Welcome back!");
       router.push("/me");
-    } catch (error) {
+    } catch {
       toast.error("An unexpected error occurred");
     } finally {
       setIsLoading(false);

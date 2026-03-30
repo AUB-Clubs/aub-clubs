@@ -38,6 +38,9 @@ export const authRouter = createTRPCRouter({
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/confirm-verification`,
+        },
       });
 
       if (authError) {

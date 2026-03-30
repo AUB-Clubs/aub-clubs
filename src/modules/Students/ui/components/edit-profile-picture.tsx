@@ -25,6 +25,7 @@ interface EditProfilePictureProps {
   currentImageUrl?: string | null;
   firstName?: string | null;
   lastName?: string | null;
+  variant?: "default" | "icon";
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -35,6 +36,7 @@ export function EditProfilePicture({
   currentImageUrl,
   firstName,
   lastName,
+  variant = "default",
 }: EditProfilePictureProps) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<string | null>(currentImageUrl || null);
@@ -77,9 +79,16 @@ export function EditProfilePicture({
       setIsUploading(true);
       try {
         const supabase = createClient();
+        
+        // Get the authenticated user's ID from Supabase (for RLS policy)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error("Not authenticated");
+        }
+        
         const fileExt = file.name.split(".").pop();
-        const fileName = `${userId}.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
+        const fileName = `${user.id}.${fileExt}`;
+        const filePath = `${user.id}/avatars/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from("uploads")
@@ -105,7 +114,7 @@ export function EditProfilePicture({
         setIsUploading(false);
       }
     },
-    [userId, currentImageUrl, updateAvatarMutation]
+    [currentImageUrl, updateAvatarMutation]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -140,14 +149,24 @@ export function EditProfilePicture({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          <Camera className="size-4" />
-          Edit Picture
-        </Button>
+        {variant === "icon" ? (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="size-8 rounded-full shadow-md"
+          >
+            <Camera className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <Camera className="size-4" />
+            Edit Picture
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>

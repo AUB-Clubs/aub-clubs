@@ -21,21 +21,13 @@ import { signUpSchema, type SignUpInput } from "../../lib/validations";
 import { trpc } from "@/trpc/client";
 
 interface SignUpFormProps {
-  onSuccess: () => void;
+  onSuccess: (email: string) => void;
 }
 
 export function SignUpForm({ onSuccess }: SignUpFormProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const signUpMutation = trpc.auth.signUp.useMutation({
-    onSuccess: () => {
-      toast.success("Account created! Please check your email to verify your account.");
-      onSuccess();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  const signUpMutation = trpc.auth.signUp.useMutation();
 
   const form = useForm<SignUpInput>({
     resolver: zodResolver(signUpSchema),
@@ -49,6 +41,16 @@ export function SignUpForm({ onSuccess }: SignUpFormProps) {
     setIsLoading(true);
     try {
       await signUpMutation.mutateAsync(values);
+      // Success - immediately redirect and show toast
+      toast.success("Account created! Please check your email to verify your account.");
+      // Store email in sessionStorage as a fallback
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("verification_email", values.email);
+      }
+      onSuccess(values.email);
+    } catch (error) {
+      // Error is already shown by tRPC's error handling
+      toast.error(error instanceof Error ? error.message : "Failed to create account");
     } finally {
       setIsLoading(false);
     }
