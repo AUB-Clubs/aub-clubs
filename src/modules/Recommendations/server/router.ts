@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { createTRPCRouter, baseProcedure } from "@/trpc/init";
+import { createTRPCRouter } from "@/trpc/init";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import { getRecommendedClubsWithDetails } from "./algorithms";
+import { protectedProcedure } from "@/modules/auth/server/middleware";
 
 // ── Types & Helpers ────────────────────────────────────────────────────
 
@@ -21,7 +22,7 @@ function computeCommitmentLevel(latestAnnouncementDate: Date | null): Commitment
 
 export const recommendationsRouter = createTRPCRouter({
   // ── Component A: Similar Clubs ─────────────────────────────────────
-  getSimilarClubs: baseProcedure
+  getSimilarClubs: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -30,7 +31,7 @@ export const recommendationsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { clubId, limit } = input;
-      const userId = ctx.userId;
+      const userId = ctx.user.id;
 
       // 1. Fetch current club
       const currentClub = await prisma.club.findUnique({
@@ -173,7 +174,7 @@ export const recommendationsRouter = createTRPCRouter({
     }),
 
   // ── Component B: Recommended Clubs ─────────────────────────────────
-  getRecommendedClubs: baseProcedure
+  getRecommendedClubs: protectedProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(20).default(6),
@@ -181,7 +182,7 @@ export const recommendationsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { limit } = input;
-      const userId = ctx.userId;
+      const userId = ctx.user.id;
 
       try {
         return await getRecommendedClubsWithDetails(userId, limit);

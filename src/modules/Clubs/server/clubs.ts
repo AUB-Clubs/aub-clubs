@@ -1,11 +1,12 @@
 import { z } from "zod"
-import { createTRPCRouter, baseProcedure } from "@/trpc/init"
+import { createTRPCRouter } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
 import { HfInference } from "@huggingface/inference"
 import { memberManagementRouter } from "./member-management"
 import { eventsRouter } from "./events"
 import { analyticsRouter } from "./analytics"
+import { protectedProcedure } from "@/modules/auth/server/middleware"
 
 const ClubTypeEnum = z.enum([
   "ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",
@@ -28,11 +29,11 @@ export const clubsRouter = createTRPCRouter({
   memberManagement: memberManagementRouter,
   events: eventsRouter,
   analytics: analyticsRouter,
-  requestJoin: baseProcedure
+  requestJoin: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { clubId } = input;
-      const userId = ctx.userId;
+      const userId = ctx.user.id;
 
       const existing = await prisma.membership.findUnique({
         where: { userId_clubId: { userId, clubId } },
@@ -69,7 +70,7 @@ export const clubsRouter = createTRPCRouter({
       return { ok: true, status: "PENDING" as const };
     }),
 
-  getOverview: baseProcedure
+  getOverview: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
@@ -102,7 +103,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  getStats: baseProcedure
+  getStats: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
@@ -114,13 +115,13 @@ export const clubsRouter = createTRPCRouter({
       return { members: membersCount, postsThisWeek }
     }),
 
-  getMembership: baseProcedure
+  getMembership: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { clubId } = input;
 
       const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId } },
+        where: { userId_clubId: { userId: ctx.user.id, clubId } },
         select: { role: true, status: true },
       });
 
@@ -130,7 +131,7 @@ export const clubsRouter = createTRPCRouter({
       };
     }),
 
-  getForumPosts: baseProcedure
+  getForumPosts: protectedProcedure
     .input(z.object({
       clubId: z.string(),
       limit: z.number().min(1).max(50).default(20),
@@ -148,7 +149,7 @@ export const clubsRouter = createTRPCRouter({
           author: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { upvotes: true } },
           postImages: { select: { imageUrl: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+          upvotes: { where: { userId: ctx.user.id }, select: { id: true } },
         },
       })
 
@@ -185,7 +186,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  getMembers: baseProcedure
+  getMembers: protectedProcedure
     .input(z.object({ clubId: z.string(), limit: z.number().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
       const { clubId, limit } = input
@@ -208,7 +209,7 @@ export const clubsRouter = createTRPCRouter({
       }))
     }),
 
-  getAnnouncements: baseProcedure
+  getAnnouncements: protectedProcedure
     .input(z.object({
       clubId: z.string(),
       limit: z.number().min(1).max(50).default(20),
@@ -230,7 +231,7 @@ export const clubsRouter = createTRPCRouter({
           author: { select: { id: true, firstName: true, lastName: true } },
           postImages: { select: { imageUrl: true } },
           _count: { select: { upvotes: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+          upvotes: { where: { userId: ctx.user.id }, select: { id: true } },
         },
       })
 
@@ -260,11 +261,11 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  toggleUpvote: baseProcedure
+  toggleUpvote: protectedProcedure
     .input(z.object({ postId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { postId } = input
-      const userId = ctx.userId
+      const userId = ctx.user.id
 
       const existingUpvote = await prisma.upvote.findUnique({
         where: { userId_postId: { userId, postId } },
@@ -283,7 +284,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  createPost: baseProcedure
+  createPost: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -294,7 +295,7 @@ export const clubsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId: input.clubId } },
+        where: { userId_clubId: { userId: ctx.user.id, clubId: input.clubId } },
         select: { role: true },
       })
       if (!membership) {
@@ -380,7 +381,7 @@ export const clubsRouter = createTRPCRouter({
       const post = await prisma.post.create({
         data: {
           clubId: input.clubId,
-          authorId: ctx.userId,
+          authorId: ctx.user.id,
           title: input.title,
           content: input.content,
           type: input.type,
@@ -389,7 +390,7 @@ export const clubsRouter = createTRPCRouter({
       return { id: post.id, title: post.title, content: post.content, type: post.type, createdAt: post.createdAt.toISOString() }
     }),
 
-  getClubsList: baseProcedure
+  getClubsList: protectedProcedure
     .input(
       z.object({
         page: z.number().min(1).default(1),
@@ -403,6 +404,7 @@ export const clubsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { page, limit, search, types, commitmentLevel, sort } = input;
       const skip = (page - 1) * limit;
+      const userId = ctx.user.id;
 
       // Determine Prisma orderBy from sort option
       let orderBy: Record<string, unknown> = { title: "asc" };
@@ -441,7 +443,7 @@ export const clubsRouter = createTRPCRouter({
           include: {
             _count: { select: { memberships: true } },
             memberships: {
-              where: { userId: ctx.userId },
+              where: { userId },
               select: { status: true },
             },
           },
@@ -489,7 +491,7 @@ export const clubsRouter = createTRPCRouter({
           include: {
             _count: { select: { memberships: true } },
             memberships: {
-              where: { userId: ctx.userId },
+              where: { userId },
               select: { status: true },
             },
           },
@@ -510,7 +512,7 @@ export const clubsRouter = createTRPCRouter({
     }),
 
   // Get popular clubs (fallback for recommendations)
-  getPopularClubs: baseProcedure
+  getPopularClubs: protectedProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(20).default(6),
@@ -518,7 +520,7 @@ export const clubsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { limit } = input;
-      const userId = ctx.userId;
+      const userId = ctx.user.id;
 
       // Get user's joined club IDs to exclude them
       const userMemberships = await prisma.membership.findMany({

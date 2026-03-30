@@ -104,7 +104,7 @@ export function DiscoverFeedTab() {
           <EmptyHeader>
             <EmptyTitle>Join some clubs to get personalized recommendations</EmptyTitle>
             <EmptyDescription>
-              Once you join clubs, we'll show you posts from clubs you might like based on your interests.
+              Once you join clubs, we&apos;ll show you posts from clubs you might like based on your interests.
             </EmptyDescription>
           </EmptyHeader>
           <div className="mt-6">
