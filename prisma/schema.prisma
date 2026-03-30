@@ -84,25 +84,30 @@ enum EventRegistrationStatus {
 // --------------------
 
 model User {
-  id              String               @id // Clerk User ID - populated via Clerk Webhooks
-  aubnetId        Int                  @unique @map("aubnet_id")
-  email           String               @unique
-  firstName       String               @map("first_name")
-  lastName        String               @map("last_name")
-  dob             DateTime             @map("dob")
-  bio             String?
-  avatarUrl       String?              @map("avatar_url")
-  major           String?
-  year            Int?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  emailVerified       Boolean   @default(false) @map("email_verified")
+  onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
+  
+  // Nullable until onboarding complete
+  aubnetId            Int?      @unique @map("aubnet_id")
+  firstName           String?   @map("first_name")
+  lastName            String?   @map("last_name")
+  dob                 DateTime? @map("dob")
+  major               String?   // Free text
+  year                Int?      // 1-4
+  bio                 String?   // Max 1000 chars
+  avatarUrl           String?   @map("avatar_url")
+  
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
   // Relations
-  memberships     Membership[]
-  posts           Post[]               @relation("AuthoredPosts")
-  upvotes         Upvote[]
-  eventRegistrations EventRegistration[]
-  performedAudits MembershipAuditLog[] @relation("AuditActor")
+  memberships         Membership[]
+  posts               Post[]               @relation("AuthoredPosts")
+  upvotes             Upvote[]
+  eventRegistrations  EventRegistration[]
+  performedAudits     MembershipAuditLog[] @relation("AuditActor")
 
   @@map("users")
 }

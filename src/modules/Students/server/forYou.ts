@@ -1,13 +1,14 @@
 import { z } from 'zod';
-import { createTRPCRouter, baseProcedure } from '../../../trpc/init';
+import { createTRPCRouter } from '../../../trpc/init';
 import { prisma } from '@/lib/prisma';
+import { protectedProcedure } from '@/modules/auth/server/middleware';
 
 /**
  * For You page backend: announcements and new posts from clubs
  * the user is registered in. Feed items are merged and sorted by created_at.
  */
 export const forYouRouter = createTRPCRouter({
-  getFeed: baseProcedure
+  getFeed: protectedProcedure
     .input(
       z
         .object({
@@ -21,22 +22,12 @@ export const forYouRouter = createTRPCRouter({
       const limit = input?.limit ?? 20;
       const cursor = input?.cursor;
       const filter = input?.filter ?? 'ALL';
+      const userId = ctx.user.id;
 
       try {
-        // Verify user exists first
-        const user = await prisma.user.findUnique({
-          where: { id: ctx.userId },
-          select: { id: true }
-        });
-
-        if (!user) {
-          console.error(`User with ID ${ctx.userId} not found in database`);
-          return { items: [], nextCursor: null };
-        }
-
         // Get club ids the current user is registered in
         const memberships = await prisma.membership.findMany({
-          where: { userId: ctx.userId },
+          where: { userId },
           select: { clubId: true },
         });
         const clubIds = memberships.map((m) => m.clubId);
@@ -71,7 +62,7 @@ export const forYouRouter = createTRPCRouter({
               }
             },
             _count: { select: { upvotes: true } },
-            upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+            upvotes: { where: { userId }, select: { id: true } },
           },
         });
 

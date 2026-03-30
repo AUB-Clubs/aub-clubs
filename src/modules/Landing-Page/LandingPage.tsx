@@ -1,12 +1,17 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, CalendarCheck, Users } from "lucide-react";
+import { AuthCallbackHandler } from "@/modules/auth/ui/components/auth-callback-handler";
 
 export default function LandingPage() {
   return (
-    <div className="bg-background text-primary dark:text-foreground font-sans min-h-screen flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
+    <>
+      <AuthCallbackHandler redirectTo="/auth/verified" />
+      <div className="bg-background text-primary dark:text-foreground font-sans min-h-screen flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
       <main className="flex-grow flex flex-col justify-center relative">
         <div className="w-full px-6 lg:px-12 xl:px-40 py-12 lg:py-24">
           <div className="max-w-[1280px] mx-auto grid lg:grid-cols-2 gap-12 lg:gap-24 items-center">
@@ -109,5 +114,6 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+    </>
   );
 }

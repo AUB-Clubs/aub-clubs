@@ -1,11 +1,22 @@
 import { initTRPC } from '@trpc/server';
 import { cache } from 'react';
 import superjson from 'superjson'
+import { createClient } from '@/modules/auth/server/utils/supabase-server';
+
 export const createTRPCContext = cache(async () => {
   /**
    * @see: https://trpc.io/docs/server/context
    */
-  return { userId: "0000" };
+  const supabase = await createClient();
+  
+  // Use getUser() instead of getSession() for security
+  // This authenticates the data by contacting the Supabase Auth server
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  return { 
+    userId: user?.id ?? null,
+    user,
+  };
 });
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>
