@@ -86,10 +86,11 @@ export function AcademicInfoStep() {
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="1">Freshman (Year 1)</SelectItem>
-                <SelectItem value="2">Sophomore (Year 2)</SelectItem>
-                <SelectItem value="3">Junior (Year 3)</SelectItem>
-                <SelectItem value="4">Senior (Year 4)</SelectItem>
+                <SelectItem value="0">Freshman (Year 0)</SelectItem>
+                <SelectItem value="1">Sophomore (Year 1)</SelectItem>
+                <SelectItem value="2">Junior (Year 2)</SelectItem>
+                <SelectItem value="3">Senior (Year 3)</SelectItem>
+                <SelectItem value="4">4th Year or above (Year 4+)</SelectItem>
               </SelectContent>
             </Select>
             <FormMessage />

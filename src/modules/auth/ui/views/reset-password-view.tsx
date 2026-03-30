@@ -44,8 +44,9 @@ export function ResetPasswordView() {
     // Check if we have a valid session from the password reset link
     async function checkSession() {
       const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsValidSession(!!session);
+      // Use getUser() instead of getSession() for security
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsValidSession(!!user);
     }
     checkSession();
   }, []);

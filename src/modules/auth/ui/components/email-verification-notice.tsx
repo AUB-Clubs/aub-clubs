@@ -17,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { createClient } from "../../lib/supabase-client";
 import { trpc } from "@/trpc/client";
 
-export function EmailVerificationNotice() {
+export function EmailVerificationNotice({ email }: { email?: string | null }) {
   const router = useRouter();
   const [isResending, setIsResending] = useState(false);
   const utils = trpc.useUtils();
@@ -52,24 +52,45 @@ export function EmailVerificationNotice() {
     setIsResending(true);
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. First try email passed via URL prop
+      let targetEmail = email;
+      
+      // 2. Fallback to session storage if URL prop is missing (e.g., after refresh)
+      if (!targetEmail && typeof window !== "undefined") {
+        targetEmail = sessionStorage.getItem("verification_email");
+      }
+      
+      // 3. Fallback to authenticated session if available
+      if (!targetEmail) {
+        const { data: { user } } = await supabase.auth.getUser();
+        targetEmail = user?.email;
+      }
 
-      if (!user?.email) {
-        toast.error("No email found");
+      if (!targetEmail) {
+        toast.error("No email found. Please try signing up again.");
         return;
       }
 
       const { error } = await supabase.auth.resend({
         type: "signup",
-        email: user.email,
+        email: targetEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/confirm-verification`,
+        },
       });
 
+      // Handle rate limits and errors
       if (error) {
-        toast.error(error.message);
+        if (error.message.includes("rate_limit") || error.status === 429) {
+          toast.error("Please wait a few minutes before requesting another email.");
+        } else {
+          toast.error(error.message);
+        }
         return;
       }
 
-      toast.success("Verification email sent!");
+      toast.success("Verification email sent! Check your inbox.");
     } catch (error) {
       toast.error("Failed to resend verification email");
     } finally {
@@ -79,9 +100,11 @@ export function EmailVerificationNotice() {
 
   async function handleSignOut() {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    await utils.invalidate();
+    // Redirect immediately for better UX
     router.push("/");
+    // Sign out and invalidate in background
+    supabase.auth.signOut();
+    utils.invalidate();
   }
 
   return (

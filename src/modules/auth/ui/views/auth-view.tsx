@@ -8,11 +8,12 @@ import { EmailVerificationNotice } from "../components/email-verification-notice
 export function AuthView() {
   const searchParams = useSearchParams();
   const showVerification = searchParams.get("verify") === "true";
+  const emailParam = searchParams.get("email");
 
   if (showVerification) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <EmailVerificationNotice />
+        <EmailVerificationNotice email={emailParam} />
       </div>
     );
   }

@@ -9,16 +9,18 @@ export const metadata = {
 
 export default async function OnboardingPage() {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  
+  // Use getUser() instead of getSession() for security
+  const { data: { user: authUser } } = await supabase.auth.getUser();
 
   // Redirect to auth if not logged in
-  if (!session) {
+  if (!authUser) {
     redirect("/auth");
   }
 
   // Get user from DB
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: authUser.id },
     select: {
       id: true,
       emailVerified: true,
@@ -40,6 +42,10 @@ export default async function OnboardingPage() {
   }
 
   if (!user.emailVerified) {
+    if (authUser.email) {
+      redirect(`/auth?verify=true&email=${encodeURIComponent(authUser.email)}`);
+    }
+
     redirect("/auth?verify=true");
   }
 

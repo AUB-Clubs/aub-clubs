@@ -61,6 +61,7 @@ export const profileRouter = createTRPCRouter({
   update: protectedProcedure
     .input(
       z.object({
+        aubnetId: z.number().int().positive("Must be a positive number").optional(),
         bio: z.string().max(2000).optional(),
         avatar_url: z.string().url().optional().nullable(),
         major: z.string().max(200).optional().nullable(),
@@ -69,9 +70,25 @@ export const profileRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
+      
+      // Check if aubnetId is being updated and if it's already taken
+      if (input.aubnetId !== undefined) {
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            aubnetId: input.aubnetId,
+            NOT: { id: userId },
+          },
+        });
+        
+        if (existingUser) {
+          throw new Error("This AUBnet ID is already taken");
+        }
+      }
+      
       const updated = await prisma.user.update({
         where: { id: userId },
         data: {
+          ...(input.aubnetId !== undefined && { aubnetId: input.aubnetId }),
           ...(input.bio !== undefined && { bio: input.bio }),
           ...(input.avatar_url !== undefined && { avatarUrl: input.avatar_url }),
           ...(input.major !== undefined && { major: input.major }),

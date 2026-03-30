@@ -52,9 +52,16 @@ export function ProfileImageUpload({
       setIsUploading(true);
       try {
         const supabase = createClient();
+        
+        // Get the authenticated user's ID from Supabase (for RLS policy)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error("Not authenticated");
+        }
+        
         const fileExt = file.name.split(".").pop();
-        const fileName = `${userId}.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
+        const fileName = `${user.id}.${fileExt}`;
+        const filePath = `${user.id}/avatars/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from("uploads")
@@ -80,7 +87,7 @@ export function ProfileImageUpload({
         setIsUploading(false);
       }
     },
-    [userId, currentImageUrl, onUploadComplete]
+    [currentImageUrl, onUploadComplete]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

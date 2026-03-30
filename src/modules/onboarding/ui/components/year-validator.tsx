@@ -17,10 +17,11 @@ export function YearValidator({ dob, selectedYear }: YearValidatorProps) {
   }
 
   const yearNames: Record<number, string> = {
-    1: "Freshman",
-    2: "Sophomore",
-    3: "Junior",
-    4: "Senior",
+    0: "Freshman",
+    1: "Sophomore",
+    2: "Junior",
+    3: "Senior",
+    4: "4th Year or above",
   };
 
   return (
