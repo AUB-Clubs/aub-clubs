@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { createTRPCRouter, baseProcedure } from "@/trpc/init"
+import { createTRPCRouter } from "@/trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
 import { HfInference } from "@huggingface/inference"
@@ -70,7 +70,7 @@ export const clubsRouter = createTRPCRouter({
       return { ok: true, status: "PENDING" as const };
     }),
 
-  getOverview: baseProcedure
+  getOverview: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
@@ -103,7 +103,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  getStats: baseProcedure
+  getStats: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
@@ -186,7 +186,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  getMembers: baseProcedure
+  getMembers: protectedProcedure
     .input(z.object({ clubId: z.string(), limit: z.number().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
       const { clubId, limit } = input
