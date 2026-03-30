@@ -110,8 +110,8 @@ interface ClubMember {
   userId: string
   role: string
   joinedAt: string
-  firstName: string
-  lastName: string
+  firstName: string | null
+  lastName: string | null
   email: string
 }
 

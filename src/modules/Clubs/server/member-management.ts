@@ -1,7 +1,9 @@
 import { z } from "zod"
-import { createTRPCRouter, baseProcedure } from "../../../trpc/init"
+import { createTRPCRouter } from "../../../trpc/init"
 import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
+import { protectedProcedure } from "@/modules/auth/server/middleware"
+import type { UserModel as User } from "@/generated/prisma/models"
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -15,8 +17,8 @@ async function getActorMembership(userId: string, clubId: string) {
   return m
 }
 
-async function requireClubAdmin(ctx: { userId: string }, clubId: string) {
-  const m = await getActorMembership(ctx.userId, clubId)
+async function requireClubAdmin(user: User, clubId: string) {
+  const m = await getActorMembership(user.id, clubId)
   if (!m) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Not an active member" })
   }
@@ -30,7 +32,7 @@ async function requireClubAdmin(ctx: { userId: string }, clubId: string) {
 
 export const memberManagementRouter = createTRPCRouter({
   // ── Members (paginated) ────────────────────────────────────────────
-  getMembers: baseProcedure
+  getMembers: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -39,7 +41,7 @@ export const memberManagementRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
+      await requireClubAdmin(ctx.user, input.clubId)
       const { clubId, page, limit } = input
       const skip = (page - 1) * limit
 
@@ -82,10 +84,10 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Pending Requests ───────────────────────────────────────────────
-  getPendingRequests: baseProcedure
+  getPendingRequests: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
+      await requireClubAdmin(ctx.user, input.clubId)
 
       const pending = await prisma.membership.findMany({
         where: { clubId: input.clubId, status: "PENDING" },
@@ -115,7 +117,7 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Accept / Reject request ────────────────────────────────────────
-  respondToRequest: baseProcedure
+  respondToRequest: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -124,7 +126,7 @@ export const memberManagementRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
+      await requireClubAdmin(ctx.user, input.clubId)
 
       const membership = await prisma.membership.findFirst({
         where: { id: input.membershipId, clubId: input.clubId, status: "PENDING" },
@@ -143,7 +145,7 @@ export const memberManagementRouter = createTRPCRouter({
         prisma.membershipAuditLog.create({
           data: {
             membershipId: input.membershipId,
-            actorId: ctx.userId,
+            actorId: ctx.user.id,
             action: input.action === "accept" ? "ACCEPTED" : "REJECTED",
           },
         }),
@@ -153,12 +155,12 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Kick member ────────────────────────────────────────────────────
-  kickMember: baseProcedure
+  kickMember: protectedProcedure
     .input(z.object({ clubId: z.string(), userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const actor = await requireClubAdmin(ctx, input.clubId)
+      const actor = await requireClubAdmin(ctx.user, input.clubId)
 
-      if (ctx.userId === input.userId) {
+      if (ctx.user.id === input.userId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot kick yourself" })
       }
 
@@ -179,7 +181,7 @@ export const memberManagementRouter = createTRPCRouter({
         prisma.membershipAuditLog.create({
           data: {
             membershipId: target.id,
-            actorId: ctx.userId,
+            actorId: ctx.user.id,
             action: "REVOKED",
           },
         }),
@@ -192,7 +194,7 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Change role ────────────────────────────────────────────────────
-  changeRole: baseProcedure
+  changeRole: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -201,7 +203,7 @@ export const memberManagementRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const actor = await requireClubAdmin(ctx, input.clubId)
+      const actor = await requireClubAdmin(ctx.user, input.clubId)
 
       const target = await prisma.membership.findUnique({
         where: { userId_clubId: { userId: input.userId, clubId: input.clubId } },
@@ -217,7 +219,7 @@ export const memberManagementRouter = createTRPCRouter({
       }
 
       // Cannot demote yourself below president
-      if (ctx.userId === input.userId && input.newRole !== "PRESIDENT") {
+      if (ctx.user.id === input.userId && input.newRole !== "PRESIDENT") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot demote yourself" })
       }
 
@@ -230,10 +232,10 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Admin announcements (all statuses) ─────────────────────────────
-  getAdminAnnouncements: baseProcedure
+  getAdminAnnouncements: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
+      await requireClubAdmin(ctx.user, input.clubId)
 
       const posts = await prisma.post.findMany({
         where: { clubId: input.clubId, type: "ANNOUNCEMENT" },
@@ -257,7 +259,7 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Create announcement (always DRAFT) ─────────────────────────────
-  createAnnouncement: baseProcedure
+  createAnnouncement: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -268,12 +270,12 @@ export const memberManagementRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
+      await requireClubAdmin(ctx.user, input.clubId)
 
       const post = await prisma.post.create({
         data: {
           clubId: input.clubId,
-          authorId: ctx.userId,
+          authorId: ctx.user.id,
           title: input.title,
           content: input.content,
           type: "ANNOUNCEMENT",
@@ -293,7 +295,7 @@ export const memberManagementRouter = createTRPCRouter({
     }),
 
   // ── Review announcement (approve / reject) ─────────────────────────
-  reviewAnnouncement: baseProcedure
+  reviewAnnouncement: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -302,7 +304,7 @@ export const memberManagementRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId)
+      await requireClubAdmin(ctx.user, input.clubId)
 
       const post = await prisma.post.findFirst({
         where: { id: input.postId, clubId: input.clubId, type: "ANNOUNCEMENT", status: "DRAFT" },

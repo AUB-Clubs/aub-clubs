@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { createTRPCRouter, baseProcedure } from '../../../trpc/init';
+import { createTRPCRouter } from '../../../trpc/init';
 import { prisma } from '@/lib/prisma';
 import { getRecommendedClubIds } from '../../Recommendations/server/algorithms';
+import { protectedProcedure } from '@/modules/auth/server/middleware';
 
 /**
  * Discover page backend: personalized posts from recommended clubs
@@ -9,7 +10,7 @@ import { getRecommendedClubIds } from '../../Recommendations/server/algorithms';
  */
 export const discoverRouter = createTRPCRouter({
   // ── Discover Feed: Posts from recommended clubs ─────────────────────
-  getDiscoverFeed: baseProcedure
+  getDiscoverFeed: protectedProcedure
     .input(
       z.object({
         limit: z.number().int().min(1).max(50).default(12),
@@ -18,7 +19,7 @@ export const discoverRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { limit, cursor } = input;
-      const userId = ctx.userId;
+      const userId = ctx.user.id;
 
       try {
         // 1. Get recommended club IDs using the advanced hybrid algorithm (top 20 for post variety)
@@ -60,7 +61,7 @@ export const discoverRouter = createTRPCRouter({
               },
             },
             _count: { select: { upvotes: true } },
-            upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+            upvotes: { where: { userId }, select: { id: true } },
           },
         });
 
@@ -102,7 +103,7 @@ export const discoverRouter = createTRPCRouter({
     }),
 
   // ── Trending Feed: Global trending posts ───────────────────────────
-  getTrendingPosts: baseProcedure
+  getTrendingPosts: protectedProcedure
     .input(
       z.object({
         limit: z.number().int().min(1).max(50).default(12),
@@ -111,6 +112,7 @@ export const discoverRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { limit, cursor } = input;
+      const userId = ctx.user.id;
 
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -137,7 +139,7 @@ export const discoverRouter = createTRPCRouter({
             },
           },
           _count: { select: { upvotes: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+          upvotes: { where: { userId }, select: { id: true } },
         },
       });
 
