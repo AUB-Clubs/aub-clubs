@@ -1,15 +1,16 @@
 import { z } from "zod";
-import { createTRPCRouter, baseProcedure } from "@/trpc/init";
+import { createTRPCRouter } from "@/trpc/init";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
+import { protectedProcedure } from "@/modules/auth/server/middleware";
 
 export const analyticsRouter = createTRPCRouter({
-  getClubAnalytics: baseProcedure
+  getClubAnalytics: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ ctx, input }) => {
       // First verify they have access to analytics
       const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId: input.clubId } },
+        where: { userId_clubId: { userId: ctx.user.id, clubId: input.clubId } },
         select: { role: true, status: true },
       });
 
