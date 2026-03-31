@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Megaphone, FileText, Heart, Flame, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { trpc } from '@/trpc/client';
+import { CommentThread } from '@/modules/posts/ui/components';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ interface PostCardProps {
   variant?: 'default' | 'discover' | 'trending';
   showJoinButton?: boolean;
   onJoin?: (clubId: string) => void;
+  currentUserId?: string;
 }
 
 // ── Helper Functions ───────────────────────────────────────────────
@@ -118,7 +120,13 @@ function UpvoteButton({
 
 // ── Main Component ─────────────────────────────────────────────────
 
-export function PostCard({ post, variant = 'default', showJoinButton = false, onJoin }: PostCardProps) {
+export function PostCard({
+  post,
+  variant = 'default',
+  showJoinButton = false,
+  onJoin,
+  currentUserId,
+}: PostCardProps) {
   const [isJoining, setIsJoining] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
 
@@ -238,6 +246,11 @@ export function PostCard({ post, variant = 'default', showJoinButton = false, on
         <span>{formatRelativeTime(post.createdAt)}</span>
         <UpvoteButton postId={post.id} initialCount={upvoteCount} initialLiked={hasUpvoted} />
       </CardFooter>
+      {currentUserId && (
+        <div className="border-t px-6 pb-4">
+          <CommentThread postId={post.id} currentUserId={currentUserId} />
+        </div>
+      )}
     </Card>
   );
 }

@@ -242,6 +242,7 @@ export const memberManagementRouter = createTRPCRouter({
         orderBy: { createdAt: "desc" },
         include: {
           author: { select: { id: true, firstName: true, lastName: true } },
+          postImages: { select: { imageUrl: true } },
         },
       })
 
@@ -255,6 +256,7 @@ export const memberManagementRouter = createTRPCRouter({
         author: `${p.author.firstName} ${p.author.lastName}`,
         authorId: p.authorId,
         priority: p.priority,
+        imageUrls: p.postImages.map((img) => img.imageUrl),
       }))
     }),
 
@@ -267,6 +269,7 @@ export const memberManagementRouter = createTRPCRouter({
         content: z.string().min(1).max(10000),
         audience: z.enum(["PUBLIC", "MEMBERS_ONLY", "BOARD_ONLY"]).default("PUBLIC"),
         priority: z.enum(["GENERAL", "IMPORTANT", "URGENT"]).optional(),
+        imageUrls: z.array(z.string().url()).max(4).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -282,6 +285,11 @@ export const memberManagementRouter = createTRPCRouter({
           status: "DRAFT",
           audience: input.audience,
           priority: input.priority ?? "GENERAL",
+          ...(input.imageUrls && input.imageUrls.length > 0 && {
+            postImages: {
+              create: input.imageUrls.map((url) => ({ imageUrl: url })),
+            },
+          }),
         },
       })
 
