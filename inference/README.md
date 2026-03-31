@@ -21,8 +21,8 @@ FastAPI service for content moderation using ML models.
 ### Option 1: Docker Compose (Recommended)
 
 ```bash
-# Start the service
-docker-compose up
+# Start the service (run from inference/)
+docker compose up
 
 # Service will be available at http://localhost:8080
 ```
@@ -92,8 +92,8 @@ uv sync --upgrade
 ## Building Docker Image
 
 ```bash
-# Build
-docker build -t hamzarach69/aub-clubs-inference:latest .
+# Build (run from repo root)
+docker build -f Dockerfile.inference -t hamzarach69/aub-clubs-inference:latest .
 
 # Push
 docker push hamzarach69/aub-clubs-inference:latest
