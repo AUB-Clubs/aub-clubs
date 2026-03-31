@@ -16,6 +16,7 @@ export const createTRPCContext = cache(async () => {
   return { 
     userId: user?.id ?? null,
     user,
+    supabase,
   };
 });
 

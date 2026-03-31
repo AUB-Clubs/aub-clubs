@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/modules/auth/lib/supabase-client";
+
+import { trpc } from "@/trpc/client";
 
 interface ProfileImageUploadProps {
   userId: string;
@@ -27,6 +28,7 @@ export function ProfileImageUpload({
 }: ProfileImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(currentImageUrl || null);
   const [isUploading, setIsUploading] = useState(false);
+  const uploadProfileImageMutation = trpc.profile.uploadProfileImage.useMutation();
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -48,46 +50,33 @@ export function ProfileImageUpload({
       const objectUrl = URL.createObjectURL(file);
       setPreview(objectUrl);
 
-      // Upload to Supabase
+      // Upload and moderate
       setIsUploading(true);
       try {
-        const supabase = createClient();
-        
-        // Get the authenticated user's ID from Supabase (for RLS policy)
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          throw new Error("Not authenticated");
-        }
-        
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${user.id}.${fileExt}`;
-        const filePath = `${user.id}/avatars/${fileName}`;
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        const base64 = await base64Promise;
 
-        const { error: uploadError } = await supabase.storage
-          .from("uploads")
-          .upload(filePath, file, { upsert: true });
+        const result = await uploadProfileImageMutation.mutateAsync({
+          base64Image: base64,
+          fileName: file.name,
+        });
 
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from("uploads")
-          .getPublicUrl(filePath);
-
-        // Add cache-busting query param
-        const urlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
-        onUploadComplete(urlWithCacheBust);
+        // Pass the new URL
+        onUploadComplete(result.imageUrl);
         toast.success("Image uploaded successfully");
-      } catch (error) {
-        toast.error("Failed to upload image");
+      } catch (error: any) {
+        toast.error(error.message || "Failed to upload image");
         setPreview(currentImageUrl || null);
         onUploadComplete(currentImageUrl || null);
       } finally {
         setIsUploading(false);
       }
     },
-    [currentImageUrl, onUploadComplete]
+    [currentImageUrl, onUploadComplete, uploadProfileImageMutation]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
