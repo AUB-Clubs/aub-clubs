@@ -6,8 +6,8 @@ import { fileURLToPath } from "url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-export async function findNearestMatchSpeakers(embedding: Array<number>): Promise<string> {
-  const { data } = await supabase.rpc('match_speakers', {
+export async function findNearestMatchBuildings(embedding: Array<number>): Promise<string> {
+  const { data } = await supabase.rpc('match_buildings', {
     query_embedding: embedding,
     match_threshold: 0.75,
     match_count: 10
@@ -17,4 +17,4 @@ export async function findNearestMatchSpeakers(embedding: Array<number>): Promis
   return match
 }
 
-export const allSpeakers: string = fs.readFileSync(path.join(__dirname, "data", "speakers.md"), "utf8")
+export const allBuildings: string = fs.readFileSync(path.join(__dirname, "data", "buildings.md"), "utf8")
