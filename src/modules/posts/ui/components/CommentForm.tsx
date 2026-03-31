@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ImagePlus, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from '@/lib/client-image-upload';
 
 /**
  * ASCII Preview:
@@ -34,97 +35,6 @@ interface CommentFormProps {
 }
 
 const MAX_COMMENT_LENGTH = 2000;
-const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const FUNCTION_SAFE_IMAGE_BYTES = 3 * 1024 * 1024;
-const MAX_COMPRESSION_ATTEMPTS = 8;
-
-async function fileToDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(new Error('Could not read image'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new window.Image();
-
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Could not decode image'));
-    };
-
-    image.src = url;
-  });
-}
-
-async function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('Could not compress image'));
-        return;
-      }
-      resolve(blob);
-    }, 'image/jpeg', quality);
-  });
-}
-
-async function prepareImageForUpload(file: File): Promise<{ uploadDataUrl: string; previewDataUrl: string }> {
-  if (file.size <= FUNCTION_SAFE_IMAGE_BYTES) {
-    const dataUrl = await fileToDataUrl(file);
-    return {
-      uploadDataUrl: dataUrl,
-      previewDataUrl: dataUrl,
-    };
-  }
-
-  const image = await loadImage(file);
-  let scale = 1;
-  let quality = 0.9;
-
-  for (let attempt = 0; attempt < MAX_COMPRESSION_ATTEMPTS; attempt += 1) {
-    const width = Math.max(1, Math.floor(image.naturalWidth * scale));
-    const height = Math.max(1, Math.floor(image.naturalHeight * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      throw new Error('Could not initialize image compression');
-    }
-
-    ctx.drawImage(image, 0, 0, width, height);
-    const compressed = await canvasToJpegBlob(canvas, quality);
-
-    if (compressed.size <= FUNCTION_SAFE_IMAGE_BYTES) {
-      const dataUrl = await fileToDataUrl(compressed);
-      return {
-        uploadDataUrl: dataUrl,
-        previewDataUrl: dataUrl,
-      };
-    }
-
-    if (quality > 0.6) {
-      quality -= 0.1;
-    } else {
-      scale *= 0.85;
-      quality = 0.82;
-    }
-  }
-
-  throw new Error('Image is still too large after compression. Please choose a smaller image.');
-}
 
 export function CommentForm({ postId, parentId, onSuccess, onCancel, placeholder }: CommentFormProps) {
   const [content, setContent] = useState('');
@@ -181,7 +91,7 @@ export function CommentForm({ postId, parentId, onSuccess, onCancel, placeholder
     }
 
     // Validate file size (5MB max)
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    if (file.size > MAX_UPLOAD_FILE_BYTES) {
       toast.error('Image must be smaller than 5MB');
       return;
     }
@@ -189,11 +99,11 @@ export function CommentForm({ postId, parentId, onSuccess, onCancel, placeholder
     setSelectedImage(file);
 
     try {
-      const preparedImage = await prepareImageForUpload(file);
-      setImagePreview(preparedImage.previewDataUrl);
+      const preparedImage = await prepareImageDataUrlForUpload(file);
+      setImagePreview(preparedImage.dataUrl);
 
       uploadImageMutation.mutate({
-        base64Image: preparedImage.uploadDataUrl,
+        base64Image: preparedImage.dataUrl,
         fileName: file.name,
       });
     } catch (error) {

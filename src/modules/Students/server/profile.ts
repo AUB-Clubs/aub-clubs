@@ -6,6 +6,8 @@ import { protectedProcedure, authProcedure } from '@/modules/auth/server/middlew
 import { moderateImage } from '@/modules/moderation/server/moderation';
 import { uploadFileToSupabase } from '@/lib/supabase-storage';
 
+const MAX_BASE64_IMAGE_CHARS = 4_100_000;
+
 function base64ToBlob(base64: string): Blob {
   const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
   const byteString = atob(base64Data);
@@ -184,7 +186,12 @@ export const profileRouter = createTRPCRouter({
   uploadProfileImage: authProcedure
     .input(
       z.object({
-        base64Image: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            'Image payload is too large. Please upload a smaller image.'
+          ),
         fileName: z.string().optional(),
       })
     )

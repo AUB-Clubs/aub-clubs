@@ -8,7 +8,10 @@ import { dayOfWeekSchema, extractedScheduleItemSchema } from "./validations";
 
 const inferInputSchema = z.object({
   mimeType: z.enum(["image/png", "image/jpeg", "image/jpg"]),
-  base64Image: z.string().min(200),
+  base64Image: z
+    .string()
+    .min(200)
+    .max(4_100_000, "Image payload is too large. Please upload a smaller image."),
 });
 
 const acceptInputSchema = z.object({

@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from "@/lib/client-image-upload";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/trpc/client";
 
@@ -27,7 +28,7 @@ interface EditProfilePictureProps {
   variant?: "default" | "icon";
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = MAX_UPLOAD_FILE_BYTES;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export function EditProfilePicture({
@@ -79,22 +80,18 @@ export function EditProfilePicture({
       // Upload and moderate
       setIsUploading(true);
       try {
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        const base64 = await base64Promise;
+        const preparedImage = await prepareImageDataUrlForUpload(file);
 
         const result = await uploadProfileImageMutation.mutateAsync({
-          base64Image: base64,
+          base64Image: preparedImage.dataUrl,
           fileName: file.name,
         });
 
         // Update in database
         await updateAvatarMutation.mutateAsync({ avatarUrl: result.imageUrl });
-      } catch (error: any) {
-        toast.error(error.message || "Failed to upload image");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to upload image";
+        toast.error(message);
         setPreview(currentImageUrl || null);
       } finally {
         setIsUploading(false);
