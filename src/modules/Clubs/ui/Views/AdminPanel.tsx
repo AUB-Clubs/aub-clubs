@@ -66,6 +66,7 @@ import {
   Save,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from '@/lib/client-image-upload'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -221,7 +222,7 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
     }
 
     // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_UPLOAD_FILE_BYTES) {
       toast.error('File too large', {
         description: 'Please upload an image smaller than 5MB',
       })
@@ -229,11 +230,7 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
     }
 
     setAvatarFile(file)
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setAvatarPreview(reader.result as string)
-    }
-    reader.readAsDataURL(file)
+    setAvatarPreview(URL.createObjectURL(file))
   }
 
   const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,7 +246,7 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
     }
 
     // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_UPLOAD_FILE_BYTES) {
       toast.error('File too large', {
         description: 'Please upload an image smaller than 5MB',
       })
@@ -257,41 +254,27 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
     }
 
     setBannerFile(file)
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setBannerPreview(reader.result as string)
-    }
-    reader.readAsDataURL(file)
+    setBannerPreview(URL.createObjectURL(file))
   }
 
   const handleSave = async () => {
     try {
       // Upload avatar if changed
       if (avatarFile) {
-        const reader = new FileReader()
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(avatarFile)
-        })
-        const base64 = await base64Promise
+        const preparedAvatar = await prepareImageDataUrlForUpload(avatarFile)
         await uploadAvatarMutation.mutateAsync({
           clubId,
-          base64Image: base64,
+          base64Image: preparedAvatar.dataUrl,
           fileName: avatarFile.name,
         })
       }
 
       // Upload banner if changed
       if (bannerFile) {
-        const reader = new FileReader()
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(bannerFile)
-        })
-        const base64 = await base64Promise
+        const preparedBanner = await prepareImageDataUrlForUpload(bannerFile)
         await uploadBannerMutation.mutateAsync({
           clubId,
-          base64Image: base64,
+          base64Image: preparedBanner.dataUrl,
           fileName: bannerFile.name,
         })
       }
@@ -1118,14 +1101,6 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     },
   })
 
-  const fileToBase64 = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error('Failed to read image'))
-      reader.readAsDataURL(file)
-    })
-
   const handleAnnouncementImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
@@ -1144,7 +1119,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
         continue
       }
 
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
         toast.error(`${file.name}: Image must be smaller than 5MB`)
         continue
       }
@@ -1152,12 +1127,12 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
       const key = `${file.name}-${file.lastModified}`
 
       try {
-        const preview = await fileToBase64(file)
-        setAnnouncementImages((prev) => [...prev, { key, fileName: file.name, preview }])
+        const preparedImage = await prepareImageDataUrlForUpload(file)
+        setAnnouncementImages((prev) => [...prev, { key, fileName: file.name, preview: preparedImage.dataUrl }])
 
         setUploadingCount((count) => count + 1)
         const result = await uploadAnnouncementImageMutation.mutateAsync({
-          base64Image: preview,
+          base64Image: preparedImage.dataUrl,
           fileName: file.name,
         })
 

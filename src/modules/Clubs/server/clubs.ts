@@ -17,6 +17,7 @@ const ClubTypeEnum = z.enum([
 ]);
 
 const CommitmentLevelEnum = z.enum(["HIGH", "MEDIUM", "LOW"]);
+const MAX_BASE64_IMAGE_CHARS = 4_100_000;
 
 /**
  * Helper to convert base64 to Blob
@@ -394,7 +395,12 @@ export const clubsRouter = createTRPCRouter({
   uploadPostImage: protectedProcedure
     .input(
       z.object({
-        base64Image: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
         fileName: z.string().optional(),
       })
     )
@@ -437,7 +443,12 @@ export const clubsRouter = createTRPCRouter({
     .input(
       z.object({
         clubId: z.string(),
-        base64Image: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
         fileName: z.string().optional(),
       })
     )
@@ -500,7 +511,12 @@ export const clubsRouter = createTRPCRouter({
     .input(
       z.object({
         clubId: z.string(),
-        base64Image: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
         fileName: z.string().optional(),
       })
     )

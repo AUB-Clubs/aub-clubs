@@ -54,6 +54,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings, ImagePlus, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from '@/lib/client-image-upload'
 import ClubEventsPublic from '@/modules/Clubs/ui/components/ClubEventsPublic'
 import { SimilarClubsSection } from '@/modules/Clubs/ui/components/SimilarClubsSection'
 import { CommentThread } from '@/modules/posts/ui/components'
@@ -371,43 +372,37 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       }
 
       // Validate file size (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
         toast.error(`${file.name}: Image must be smaller than 5MB`)
         continue
       }
 
-      // Create preview
-      const reader = new FileReader()
-      reader.onloadend = async () => {
-        const base64 = reader.result as string
-        const preview = base64
+      try {
+        const preparedImage = await prepareImageDataUrlForUpload(file)
 
         // Add to state with preview
-        const imageEntry = { file, preview, url: undefined }
+        const imageEntry = { file, preview: preparedImage.dataUrl, url: undefined }
         setPostImages(prev => [...prev, imageEntry])
 
         // Upload image
         setIsUploadingImage(true)
-        try {
-          const result = await uploadPostImageMutation.mutateAsync({
-            base64Image: base64,
-            fileName: file.name,
-          })
-          
-          // Update with URL
-          setPostImages(prev =>
-            prev.map(img =>
-              img.file === file ? { ...img, url: result.imageUrl } : img
-            )
+        const result = await uploadPostImageMutation.mutateAsync({
+          base64Image: preparedImage.dataUrl,
+          fileName: file.name,
+        })
+
+        // Update with URL
+        setPostImages(prev =>
+          prev.map(img =>
+            img.file === file ? { ...img, url: result.imageUrl } : img
           )
-        } catch (error) {
-          // Remove from state on error
-          setPostImages(prev => prev.filter(img => img.file !== file))
-        } finally {
-          setIsUploadingImage(false)
-        }
+        )
+      } catch {
+        // Remove from state on error
+        setPostImages(prev => prev.filter(img => img.file !== file))
+      } finally {
+        setIsUploadingImage(false)
       }
-      reader.readAsDataURL(file)
     }
 
     // Clear input
