@@ -501,13 +501,13 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
               <div className="h-full w-full bg-gradient-to-br from-muted to-muted/80" />
             )}
           </div>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between -mt-12 relative z-10 px-2 sm:px-0">
+          <div className="relative z-10 mt-4 flex flex-col gap-4 px-2 sm:flex-row sm:items-end sm:justify-between sm:px-0">
             <div className="flex items-end gap-4">
               {isLoading ? (
-                <Skeleton className="size-20 rounded-xl border-4 border-background shadow-lg bg-sidebar animate-pulse" />
+                <Skeleton className="-mt-12 size-20 rounded-xl border-4 border-background bg-sidebar shadow-lg animate-pulse" />
               ) : (
                 <Avatar
-                  className="size-20 rounded-xl border-4 border-background shadow-lg"
+                  className="-mt-12 size-20 rounded-xl border-4 border-background shadow-lg"
                 >
                   {club?.imageUrl ? (
                     <AvatarImage src={club.imageUrl} alt={club.title} />
@@ -872,17 +872,12 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               {announcement.imageUrls.length > 0 && (
                                 <div className="flex flex-wrap gap-2 pt-2">
                                   {announcement.imageUrls.map((url, i) => (
-                                    <div
+                                    <ExpandableImage
                                       key={i}
-                                      className="relative h-24 w-24 overflow-hidden rounded-md bg-muted"
-                                    >
-                                      <Image
-                                        src={url}
-                                        alt=""
-                                        fill
-                                        className="object-cover"
-                                      />
-                                    </div>
+                                      src={url}
+                                      alt={`${announcement.title} image ${i + 1}`}
+                                      className="h-24 w-24 rounded-md"
+                                    />
                                   ))}
                                 </div>
                               )}
@@ -907,6 +902,14 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 <span>{announcement.upvoteCount}</span>
                               </Button>
                             </CardFooter>
+                            {currentUserData && (
+                              <div className="border-t px-6 pb-4">
+                                <CommentThread
+                                  postId={announcement.id}
+                                  currentUserId={currentUserData.id}
+                                />
+                              </div>
+                            )}
                           </Card>
                         </li>
                       ))}
@@ -1141,17 +1144,12 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               {post.imageUrls && post.imageUrls.length > 0 && (
                                 <div className="flex flex-wrap gap-2 pt-2">
                                   {post.imageUrls.map((url, i) => (
-                                    <div
+                                    <ExpandableImage
                                       key={i}
-                                      className="relative h-24 w-24 overflow-hidden rounded-md bg-muted"
-                                    >
-                                      <Image
-                                        src={url}
-                                        alt=""
-                                        fill
-                                        className="object-cover"
-                                      />
-                                    </div>
+                                      src={url}
+                                      alt={`${post.title || 'Post'} image ${i + 1}`}
+                                      className="h-24 w-24 rounded-md"
+                                    />
                                   ))}
                                 </div>
                               )}

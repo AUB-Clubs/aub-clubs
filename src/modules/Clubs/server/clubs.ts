@@ -163,7 +163,7 @@ export const clubsRouter = createTRPCRouter({
       const { clubId, limit, cursor } = input
 
       const posts = await prisma.post.findMany({
-        where: { clubId },
+        where: { clubId, type: "GENERAL", status: "PUBLISHED" },
         orderBy: { createdAt: "desc" },
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
@@ -217,7 +217,11 @@ export const clubsRouter = createTRPCRouter({
         where: { clubId },
         orderBy: [{ role: "desc" }, { joinedAt: "asc" }],
         take: limit,
-        include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        include: {
+          user: {
+            select: { firstName: true, lastName: true, email: true, avatarUrl: true },
+          },
+        },
       })
 
       return memberships.map((m: typeof memberships[number]) => ({
@@ -228,6 +232,7 @@ export const clubsRouter = createTRPCRouter({
         firstName: m.user.firstName,
         lastName: m.user.lastName,
         email: m.user.email,
+        avatarUrl: m.user.avatarUrl,
       }))
     }),
 
@@ -342,7 +347,7 @@ export const clubsRouter = createTRPCRouter({
         // Use our in-house moderation API (will throw if content is unsafe or service unavailable)
         await moderateText(textToCheck, {
           throwOnUnsafe: true,
-          textThreshold: 0.05,
+          textThreshold: 0.02,
         });
       } catch (error: unknown) {
         // If it's a TRPC error (content violation or service error), re-throw it
@@ -366,6 +371,7 @@ export const clubsRouter = createTRPCRouter({
             title: input.title,
             content: input.content,
             type: input.type,
+            status: input.type === "GENERAL" ? "PUBLISHED" : "DRAFT",
           },
         });
 
@@ -582,7 +588,7 @@ export const clubsRouter = createTRPCRouter({
         try {
           await moderateText(input.description, {
             throwOnUnsafe: true,
-            textThreshold: 0.05,
+            textThreshold: 0.02,
           });
         } catch (error: unknown) {
           if (error instanceof TRPCError) {
@@ -601,7 +607,7 @@ export const clubsRouter = createTRPCRouter({
         try {
           await moderateText(input.mission, {
             throwOnUnsafe: true,
-            textThreshold: 0.05,
+            textThreshold: 0.02,
           });
         } catch (error: unknown) {
           if (error instanceof TRPCError) {

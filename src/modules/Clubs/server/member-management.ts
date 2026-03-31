@@ -242,6 +242,7 @@ export const memberManagementRouter = createTRPCRouter({
         orderBy: { createdAt: "desc" },
         include: {
           author: { select: { id: true, firstName: true, lastName: true } },
+          postImages: { select: { imageUrl: true } },
         },
       })
 
@@ -255,6 +256,7 @@ export const memberManagementRouter = createTRPCRouter({
         author: `${p.author.firstName} ${p.author.lastName}`,
         authorId: p.authorId,
         priority: p.priority,
+        imageUrls: p.postImages.map((img) => img.imageUrl),
       }))
     }),
 
@@ -284,11 +286,8 @@ export const memberManagementRouter = createTRPCRouter({
           audience: input.audience,
           priority: input.priority ?? "GENERAL",
           ...(input.imageUrls && input.imageUrls.length > 0 && {
-            images: {
-              create: input.imageUrls.map((url, index) => ({
-                url,
-                order: index,
-              })),
+            postImages: {
+              create: input.imageUrls.map((url) => ({ imageUrl: url })),
             },
           }),
         },

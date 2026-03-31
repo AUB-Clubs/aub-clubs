@@ -8,6 +8,27 @@ import { TRPCError } from "@trpc/server";
 
 const INFERENCE_URL = process.env.INFERENCE_URL || "http://localhost:8080";
 
+const DEFAULT_MODERATION_TIMEOUT_MS = (() => {
+  const parsed = Number(process.env.MODERATION_TIMEOUT_MS);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return 120000;
+})();
+
+const MODERATION_RETRIES = (() => {
+  const parsed = Number(process.env.MODERATION_RETRIES);
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return Math.floor(parsed);
+  }
+  return 3;
+})();
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const BLOCKED_PROFANITY_REGEX =
+  /\b(?:fuck|fucks|fucked|fucking|fucker|fuckers|shit|shits|shitty|bullshit|motherfucker|motherfuckers)\b/i;
+
 /**
  * Label definitions for text moderation
  * Based on KoalaAI/Text-Moderation model
@@ -53,7 +74,7 @@ export interface ModerationOptions {
   /**
    * Threshold for text moderation (0-1)
    * If any unsafe label scores above this threshold, content is rejected
-   * @default 0.05
+   * @default 0.02
    */
   textThreshold?: number;
 
@@ -72,7 +93,7 @@ export interface ModerationOptions {
 
   /**
    * Timeout for the moderation request in milliseconds
-   * @default 30000
+   * @default 120000
    */
   timeout?: number;
 }
@@ -92,65 +113,69 @@ const callInferenceService = async (payload: {
   image?: string;
   timeout?: number;
 }): Promise<ModerationResult> => {
-  try {
-    const response = await fetch(`${INFERENCE_URL}/moderate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: payload.text,
-        image: payload.image,
-      }),
-      signal: AbortSignal.timeout(payload.timeout || 30000),
-    });
+  let lastError: unknown;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Inference service returned ${response.status}: ${errorText}`);
+  for (let attempt = 0; attempt <= MODERATION_RETRIES; attempt++) {
+    try {
+      const response = await fetch(`${INFERENCE_URL}/moderate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: payload.text,
+          image: payload.image,
+        }),
+        signal: AbortSignal.timeout(payload.timeout ?? DEFAULT_MODERATION_TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const shouldRetry =
+          response.status === 408 ||
+          response.status === 429 ||
+          response.status >= 500;
+
+        if (!shouldRetry || attempt === MODERATION_RETRIES) {
+          throw new Error(`Inference service returned ${response.status}: ${errorText}`);
+        }
+
+        await wait(300 * (attempt + 1));
+        continue;
+      }
+
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt === MODERATION_RETRIES) {
+        break;
+      }
+
+      await wait(300 * (attempt + 1));
     }
-
-    return await response.json();
-  } catch (error) {
-    console.warn("Moderation service unavailable:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Moderation service is currently unavailable",
-      cause: error,
-    });
   }
+
+  console.warn("Moderation service unavailable:", lastError);
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Moderation service is currently unavailable",
+    cause: lastError,
+  });
 };
 
 /**
  * Check if text moderation flags indicate unsafe content
  */
-const isTextUnsafe = (flags: TextFlag[], threshold: number = 0.05): { isUnsafe: boolean; reason?: string; label?: string } => {
+const isTextUnsafe = (flags: TextFlag[], threshold: number = 0.02): { isUnsafe: boolean; reason?: string; label?: string } => {
   const unsafeLabels = ["S", "H", "V", "HR", "SH", "S3", "H2", "V2"];
-  
-  // Find the highest scoring flag
-  const topFlag = flags.reduce((prev, current) => 
-    (current.score > prev.score) ? current : prev
-  );
 
-  // If OK is the top result but confidence is low, check for unsafe labels
-  if (topFlag.label === "OK" && topFlag.score < 0.95) {
-    const unsafeFlag = flags.find(flag => 
-      unsafeLabels.includes(flag.label) && flag.score > threshold
-    );
-    
-    if (unsafeFlag) {
-      return {
-        isUnsafe: true,
-        label: unsafeFlag.label,
-        reason: TEXT_MODERATION_LABELS[unsafeFlag.label as keyof typeof TEXT_MODERATION_LABELS] || "inappropriate language",
-      };
-    }
-  }
+  const unsafeFlag = flags
+    .filter((flag) => unsafeLabels.includes(flag.label) && flag.score >= threshold)
+    .sort((a, b) => b.score - a.score)[0];
 
-  // If an unsafe label is the top result and above threshold
-  if (unsafeLabels.includes(topFlag.label) && topFlag.score > threshold) {
+  if (unsafeFlag) {
     return {
       isUnsafe: true,
-      label: topFlag.label,
-      reason: TEXT_MODERATION_LABELS[topFlag.label as keyof typeof TEXT_MODERATION_LABELS] || "inappropriate language",
+      label: unsafeFlag.label,
+      reason: TEXT_MODERATION_LABELS[unsafeFlag.label as keyof typeof TEXT_MODERATION_LABELS] || "inappropriate language",
     };
   }
 
@@ -198,7 +223,18 @@ export async function moderateText(
   text: string,
   options: ModerationOptions = {}
 ): Promise<ModerationResult> {
-  const { textThreshold = 0.05, throwOnUnsafe = true, timeout = 30000 } = options;
+  const {
+    textThreshold = 0.02,
+    throwOnUnsafe = true,
+    timeout = DEFAULT_MODERATION_TIMEOUT_MS,
+  } = options;
+
+  if (throwOnUnsafe && BLOCKED_PROFANITY_REGEX.test(text)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Your content contains profanity that is not allowed. Please revise it.",
+    });
+  }
 
   const result = await callInferenceService({ text, timeout });
 
@@ -228,7 +264,11 @@ export async function moderateImage(
   base64Image: string,
   options: ModerationOptions = {}
 ): Promise<ModerationResult> {
-  const { imageThreshold = 0.3, throwOnUnsafe = true, timeout = 30000 } = options;
+  const {
+    imageThreshold = 0.3,
+    throwOnUnsafe = true,
+    timeout = DEFAULT_MODERATION_TIMEOUT_MS,
+  } = options;
 
   const cleanedBase64 = cleanBase64(base64Image);
   const result = await callInferenceService({ image: cleanedBase64, timeout });
@@ -265,7 +305,7 @@ export async function moderateBoth(
     textThreshold = 0.05,
     imageThreshold = 0.3,
     throwOnUnsafe = true,
-    timeout = 30000,
+    timeout = DEFAULT_MODERATION_TIMEOUT_MS,
   } = options;
 
   const cleanedBase64 = cleanBase64(base64Image);

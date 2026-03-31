@@ -33,6 +33,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ExpandableImage } from '@/components/ui/expandable-image'
+import { CommentThread } from '@/modules/posts/ui/components'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1078,12 +1080,19 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     audience: 'PUBLIC' as 'PUBLIC' | 'MEMBERS_ONLY' | 'BOARD_ONLY',
     priority: 'GENERAL' as 'GENERAL' | 'IMPORTANT' | 'URGENT',
   })
-  
+  const [announcementImages, setAnnouncementImages] = useState<
+    { key: string; fileName: string; preview: string; url?: string }[]
+  >([])
+  const [uploadingCount, setUploadingCount] = useState(0)
+  const announcementImageInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadAnnouncementImageMutation = trpc.clubs.uploadPostImage.useMutation()
 
   const announcementsQuery = trpc.clubs.memberManagement.getAdminAnnouncements.useQuery(
     { clubId },
     { enabled: !!clubId }
   )
+  const currentUserQuery = trpc.profile.get.useQuery(undefined, { staleTime: 5 * 60 * 1000 })
 
   const utils = trpc.useUtils()
 
@@ -1092,6 +1101,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
       utils.clubs.memberManagement.getAdminAnnouncements.invalidate({ clubId })
       setCreateOpen(false)
       setForm({ title: '', content: '', audience: 'PUBLIC', priority: 'GENERAL' })
+      setAnnouncementImages([])
     },
   })
 
@@ -1102,15 +1112,85 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     },
   })
 
+  const fileToBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('Failed to read image'))
+      reader.readAsDataURL(file)
+    })
+
+  const handleAnnouncementImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    if (announcementImages.length + files.length > 4) {
+      toast.error('You can only upload up to 4 images per announcement')
+      if (announcementImageInputRef.current) {
+        announcementImageInputRef.current.value = ''
+      }
+      return
+    }
+
+    for (const file of files) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast.error(`${file.name}: Only JPG, PNG, and WebP images are allowed`)
+        continue
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name}: Image must be smaller than 5MB`)
+        continue
+      }
+
+      const key = `${file.name}-${file.lastModified}`
+
+      try {
+        const preview = await fileToBase64(file)
+        setAnnouncementImages((prev) => [...prev, { key, fileName: file.name, preview }])
+
+        setUploadingCount((count) => count + 1)
+        const result = await uploadAnnouncementImageMutation.mutateAsync({
+          base64Image: preview,
+          fileName: file.name,
+        })
+
+        setAnnouncementImages((prev) =>
+          prev.map((img) =>
+            img.key === key ? { ...img, url: result.imageUrl } : img
+          )
+        )
+      } catch {
+        setAnnouncementImages((prev) => prev.filter((img) => img.key !== key))
+      } finally {
+        setUploadingCount((count) => Math.max(0, count - 1))
+      }
+    }
+
+    if (announcementImageInputRef.current) {
+      announcementImageInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveAnnouncementImage = (key: string) => {
+    setAnnouncementImages((prev) => prev.filter((img) => img.key !== key))
+  }
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim() || !form.content.trim()) return
+    if (announcementImages.some((img) => !img.url)) {
+      toast.error('Please wait for images to finish uploading')
+      return
+    }
+
     createMutation.mutate({
       clubId,
       title: form.title.trim(),
       content: form.content.trim(),
       audience: form.audience,
       priority: form.priority,
+      imageUrls: announcementImages.map((img) => img.url!).filter(Boolean),
     })
   }
 
@@ -1129,12 +1209,22 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
   }
 
   const announcements = announcementsQuery.data ?? []
+  const currentUserId = currentUserQuery.data?.id
 
   return (
     <>
       {/* Create button */}
       <div className="flex justify-end">
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open)
+            if (!open) {
+              setForm({ title: '', content: '', audience: 'PUBLIC', priority: 'GENERAL' })
+              setAnnouncementImages([])
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="gap-1.5 rounded-lg">
               <Plus className="size-4" />
@@ -1214,6 +1304,56 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Images (optional)</Label>
+                  <span className="text-xs text-muted-foreground">
+                    {announcementImages.length}/4
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {announcementImages.map((img) => (
+                    <div key={img.key} className="relative">
+                      <img
+                        src={img.preview}
+                        alt={img.fileName}
+                        className="h-20 w-20 rounded-md object-cover"
+                      />
+                      <button
+                        type="button"
+                        className="absolute -right-1 -top-1 rounded-full bg-background p-1 shadow"
+                        onClick={() => handleRemoveAnnouncementImage(img.key)}
+                        disabled={createMutation.isPending}
+                        aria-label="Remove image"
+                      >
+                        <X className="size-3" />
+                      </button>
+                      {!img.url && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/50">
+                          <Loader2 className="size-4 animate-spin text-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {announcementImages.length < 4 && (
+                    <button
+                      type="button"
+                      className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed text-muted-foreground hover:bg-muted/50"
+                      onClick={() => announcementImageInputRef.current?.click()}
+                    >
+                      <Upload className="size-4" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={announcementImageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleAnnouncementImageSelect}
+                />
+              </div>
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   type="button"
@@ -1226,6 +1366,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                   type="submit"
                   disabled={
                     createMutation.isPending ||
+                    uploadingCount > 0 ||
                     !form.title.trim() ||
                     !form.content.trim()
                   }
@@ -1326,10 +1467,27 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
                   {a.content}
                 </p>
+                {a.imageUrls && a.imageUrls.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {a.imageUrls.map((url: string, i: number) => (
+                      <ExpandableImage
+                        key={`${a.id}-${i}`}
+                        src={url}
+                        alt={`${a.title} image ${i + 1}`}
+                        className="h-20 w-20 rounded-md"
+                      />
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground pt-1">
                   By {a.author} · {formatDate(a.createdAt)}
                 </p>
               </CardContent>
+              {currentUserId && (
+                <div className="border-t px-6 pb-4">
+                  <CommentThread postId={a.id} currentUserId={currentUserId} />
+                </div>
+              )}
             </Card>
           ))}
         </div>
