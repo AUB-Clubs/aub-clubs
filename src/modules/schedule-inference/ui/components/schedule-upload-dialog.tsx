@@ -25,6 +25,98 @@ type PreviewItem = {
   location?: string | null;
 };
 
+const MAX_INPUT_FILE_BYTES = 8 * 1024 * 1024;
+const FUNCTION_SAFE_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_COMPRESSION_ATTEMPTS = 8;
+
+type PreparedImage = {
+  blob: Blob;
+  mimeType: "image/png" | "image/jpeg";
+};
+
+function fileToDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Could not read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not decode image"));
+    };
+    image.src = url;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Could not compress image"));
+        return;
+      }
+      resolve(blob);
+    }, "image/jpeg", quality);
+  });
+}
+
+async function prepareImageForInference(file: File): Promise<PreparedImage> {
+  if (file.size <= FUNCTION_SAFE_IMAGE_BYTES) {
+    return {
+      blob: file,
+      mimeType: file.type === "image/png" ? "image/png" : "image/jpeg",
+    };
+  }
+
+  const image = await loadImage(file);
+  let scale = 1;
+  let quality = 0.9;
+
+  for (let attempt = 0; attempt < MAX_COMPRESSION_ATTEMPTS; attempt += 1) {
+    const width = Math.max(1, Math.floor(image.naturalWidth * scale));
+    const height = Math.max(1, Math.floor(image.naturalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Could not initialize image compression");
+    }
+
+    ctx.drawImage(image, 0, 0, width, height);
+    const compressed = await canvasToBlob(canvas, quality);
+
+    if (compressed.size <= FUNCTION_SAFE_IMAGE_BYTES) {
+      return {
+        blob: compressed,
+        mimeType: "image/jpeg",
+      };
+    }
+
+    if (quality > 0.6) {
+      quality -= 0.1;
+    } else {
+      scale *= 0.85;
+      quality = 0.82;
+    }
+  }
+
+  throw new Error("Image is too large. Please upload a smaller screenshot.");
+}
+
 export function ScheduleUploadDialog() {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
@@ -84,32 +176,37 @@ export function ScheduleUploadDialog() {
       toast.error("Please upload PNG or JPG/JPEG images");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
+    if (file.size > MAX_INPUT_FILE_BYTES) {
       toast.error("Image must be below 8MB");
+      return;
+    }
+
+    let prepared: PreparedImage;
+    try {
+      prepared = await prepareImageForInference(file);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not process image";
+      toast.error(message);
       return;
     }
 
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
-    setPreviewUrl(URL.createObjectURL(file));
-    setSelectedFileName(file.name);
-    setSelectedFileSize(file.size);
 
-    const base64Image = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const raw = String(reader.result ?? "");
-        const payload = raw.split(",")[1];
-        if (!payload) reject(new Error("Invalid image"));
-        resolve(payload);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    setPreviewUrl(URL.createObjectURL(prepared.blob));
+    setSelectedFileName(file.name);
+    setSelectedFileSize(prepared.blob.size);
+
+    const dataUrl = await fileToDataUrl(prepared.blob);
+    const base64Image = dataUrl.split(",")[1];
+    if (!base64Image) {
+      toast.error("Invalid image payload");
+      return;
+    }
 
     inferMutation.mutate({
-      mimeType: file.type as "image/png" | "image/jpeg" | "image/jpg",
+      mimeType: prepared.mimeType,
       base64Image,
     });
   }

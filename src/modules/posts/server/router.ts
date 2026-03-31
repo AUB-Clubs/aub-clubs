@@ -13,6 +13,8 @@ import { moderateText, moderateImage } from "@/modules/moderation/server/moderat
 import { uploadFileToSupabase } from "@/lib/supabase-storage";
 import { createClient } from "@/modules/auth/server/utils/supabase-server";
 
+const MAX_COMMENT_IMAGE_BASE64_CHARS = 4_100_000;
+
 /**
  * Helper to convert base64 to Blob
  */
@@ -330,7 +332,12 @@ export const postsRouter = createTRPCRouter({
   uploadCommentImage: protectedProcedure
     .input(
       z.object({
-        base64Image: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_COMMENT_IMAGE_BASE64_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
         fileName: z.string().optional(),
       })
     )
