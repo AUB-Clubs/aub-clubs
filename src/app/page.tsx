@@ -1,13 +1,15 @@
-import { Metadata } from "next";
-import LandingPage from "@/modules/Landing-Page/LandingPage";
+import { redirect } from "next/navigation";
+import { createClient } from "@/modules/auth/server/utils/supabase-server";
 
-export const metadata: Metadata = {
-  title: "Welcome: AUB Clubs",
-  description: "The central hub for all student clubs and activities at AUB.",
-};
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-export default function Home() {
-  return (
-    <LandingPage />
-  )
+  if (user) {
+    redirect("/discover");
+  }
+
+  redirect("/auth");
 }

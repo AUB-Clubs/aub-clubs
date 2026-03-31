@@ -10,6 +10,8 @@ import { authRouter } from '../../modules/auth/server/router';
 import { onboardingRouter } from '../../modules/onboarding/server/router';
 import { moderationRouter } from '../../modules/moderation/server/router';
 import { postsRouter } from '../../modules/posts/server/router';
+import { calendarRouter } from '../../modules/calendar/server/router';
+import { scheduleInferenceRouter } from '../../modules/schedule-inference/server/router';
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -23,6 +25,8 @@ export const appRouter = createTRPCRouter({
   recommendations: recommendationsRouter,
   moderation: moderationRouter,
   posts: postsRouter,
+  calendar: calendarRouter,
+  scheduleInference: scheduleInferenceRouter,
 });
 
 export type AppRouter = typeof appRouter;
