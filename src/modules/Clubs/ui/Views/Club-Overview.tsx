@@ -10,7 +10,7 @@ import {
   AlertDialogAction,
 } from '@/components/ui/alert-dialog'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { trpc } from '@/trpc/client'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -52,10 +52,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings } from 'lucide-react'
+import { CalendarDays, FileText, Megaphone, Pencil, Users, Heart, Settings, ImagePlus, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ClubEventsPublic from '@/modules/Clubs/ui/components/ClubEventsPublic'
 import { SimilarClubsSection } from '@/modules/Clubs/ui/components/SimilarClubsSection'
+import { CommentThread } from '@/modules/posts/ui/components'
+import { ExpandableImage } from '@/components/ui/expandable-image'
 
 function CommitmentBadgeOverview({ clubId }: { clubId: string }) {
   const query = trpc.commitmentLevel.getCommitmentLevel.useQuery({ clubId });
@@ -113,6 +115,7 @@ interface ClubMember {
   firstName: string | null
   lastName: string | null
   email: string
+  avatarUrl?: string | null
 }
 
 interface ClubAnnouncement {
@@ -162,6 +165,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
 
   const { ref: announcementsRef, inView: announcementsInView } = useInView()
   const { ref: forumRef, inView: forumInView } = useInView()
+
+  // Get current user for comments
+  const { data: currentUserData } = trpc.auth.getCurrentUser.useQuery()
 
   const overview = trpc.clubs.getOverview.useQuery(
     { clubId: clubId! },
@@ -220,6 +226,13 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
   }, [forumInView, forumPostsQuery])
 
   const utils = trpc.useUtils()
+  
+  const uploadPostImageMutation = trpc.clubs.uploadPostImage.useMutation({
+    onError: (err) => {
+      toast.error(err.message || "Failed to upload image. Please try again.")
+    },
+  })
+  
   const createPostMutation = trpc.clubs.createPost.useMutation({
     onSuccess: () => {
       if (!clubId) return
@@ -227,6 +240,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
       utils.clubs.getAnnouncements.invalidate({ clubId })
       setPostDialogOpen(false)
       setPostForm({ title: '', content: '', type: 'GENERAL' })
+      setPostImages([])
       toast.success("Post created successfully!")
     },
     onError: (err) => {
@@ -314,17 +328,96 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
     content: '',
     type: 'GENERAL' as 'GENERAL' | 'ANNOUNCEMENT',
   })
+  const [postImages, setPostImages] = useState<{ file: File; preview: string; url?: string }[]>([])
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
 
   const handleCreatePost = (e: React.FormEvent) => {
     e.preventDefault()
     if (!clubId || !postForm.title.trim() || !postForm.content.trim()) return
+    
+    // Check if any images are still uploading
+    if (postImages.some(img => !img.url)) {
+      toast.error("Please wait for images to finish uploading")
+      return
+    }
+    
     createPostMutation.mutate({
       clubId,
       title: postForm.title.trim(),
       content: postForm.content.trim(),
       type: postForm.type,
+      imageUrls: postImages.map(img => img.url!).filter(Boolean),
     })
+  }
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    // Check total images limit
+    if (postImages.length + files.length > 4) {
+      toast.error("You can only upload up to 4 images per post")
+      return
+    }
+
+    // Validate and upload each file
+    for (const file of files) {
+      // Validate file type
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast.error(`${file.name}: Only JPG, PNG, and WebP images are allowed`)
+        continue
+      }
+
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name}: Image must be smaller than 5MB`)
+        continue
+      }
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = async () => {
+        const base64 = reader.result as string
+        const preview = base64
+
+        // Add to state with preview
+        const imageEntry = { file, preview, url: undefined }
+        setPostImages(prev => [...prev, imageEntry])
+
+        // Upload image
+        setIsUploadingImage(true)
+        try {
+          const result = await uploadPostImageMutation.mutateAsync({
+            base64Image: base64,
+            fileName: file.name,
+          })
+          
+          // Update with URL
+          setPostImages(prev =>
+            prev.map(img =>
+              img.file === file ? { ...img, url: result.imageUrl } : img
+            )
+          )
+        } catch (error) {
+          // Remove from state on error
+          setPostImages(prev => prev.filter(img => img.file !== file))
+        } finally {
+          setIsUploadingImage(false)
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+
+    // Clear input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveImage = (index: number) => {
+    setPostImages(prev => prev.filter((_, i) => i !== index))
   }
 
   const isLoading = overview.isLoading
@@ -408,13 +501,13 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
               <div className="h-full w-full bg-gradient-to-br from-muted to-muted/80" />
             )}
           </div>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between -mt-12 relative z-10 px-2 sm:px-0">
+          <div className="relative z-10 mt-4 flex flex-col gap-4 px-2 sm:flex-row sm:items-end sm:justify-between sm:px-0">
             <div className="flex items-end gap-4">
               {isLoading ? (
-                <Skeleton className="size-20 rounded-xl border-4 border-background shadow-lg bg-sidebar animate-pulse" />
+                <Skeleton className="-mt-12 size-20 rounded-xl border-4 border-background bg-sidebar shadow-lg animate-pulse" />
               ) : (
                 <Avatar
-                  className="size-20 rounded-xl border-4 border-background shadow-lg"
+                  className="-mt-12 size-20 rounded-xl border-4 border-background shadow-lg"
                 >
                   {club?.imageUrl ? (
                     <AvatarImage src={club.imageUrl} alt={club.title} />
@@ -668,6 +761,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                           className="flex items-center gap-3 rounded-xl border border-muted bg-muted/20 px-3 py-2"
                         >
                           <Avatar className="size-11 border-2 border-background shadow-sm">
+                            {member.avatarUrl ? (
+                              <AvatarImage src={member.avatarUrl} alt={`${member.firstName} ${member.lastName}`} />
+                            ) : null}
                             <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                               {getInitials(member.firstName, member.lastName)}
                             </AvatarFallback>
@@ -776,17 +872,12 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               {announcement.imageUrls.length > 0 && (
                                 <div className="flex flex-wrap gap-2 pt-2">
                                   {announcement.imageUrls.map((url, i) => (
-                                    <div
+                                    <ExpandableImage
                                       key={i}
-                                      className="relative h-24 w-24 overflow-hidden rounded-md bg-muted"
-                                    >
-                                      <Image
-                                        src={url}
-                                        alt=""
-                                        fill
-                                        className="object-cover"
-                                      />
-                                    </div>
+                                      src={url}
+                                      alt={`${announcement.title} image ${i + 1}`}
+                                      className="h-24 w-24 rounded-md"
+                                    />
                                   ))}
                                 </div>
                               )}
@@ -811,6 +902,14 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 <span>{announcement.upvoteCount}</span>
                               </Button>
                             </CardFooter>
+                            {currentUserData && (
+                              <div className="border-t px-6 pb-4">
+                                <CommentThread
+                                  postId={announcement.id}
+                                  currentUserId={currentUserData.id}
+                                />
+                              </div>
+                            )}
                           </Card>
                         </li>
                       ))}
@@ -874,7 +973,7 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                             <Label htmlFor="post-content">Content</Label>
                             <Textarea
                               id="post-content"
-                              placeholder="What’s on your mind?"
+                              placeholder="What's on your mind?"
                               value={postForm.content}
                               onChange={(e) =>
                                 setPostForm((prev) => ({ ...prev, content: e.target.value }))
@@ -884,12 +983,79 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               required
                             />
                           </div>
+                          
+                          {/* Image upload section */}
+                          <div className="space-y-2">
+                            <Label>Images (optional, max 4)</Label>
+                            
+                            {postImages.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2">
+                                {postImages.map((img, index) => (
+                                  <div key={index} className="relative overflow-hidden rounded-md border">
+                                    <div className="relative h-24 w-full bg-muted">
+                                      <Image
+                                        src={img.preview}
+                                        alt={`Upload ${index + 1}`}
+                                        fill
+                                        className="object-cover"
+                                      />
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="icon"
+                                      className="absolute right-1 top-1 h-6 w-6"
+                                      onClick={() => handleRemoveImage(index)}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                    {!img.url && (
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                                        <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {postImages.length < 4 && (
+                              <>
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  multiple
+                                  onChange={handleImageSelect}
+                                  className="hidden"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full gap-2"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  disabled={isUploadingImage}
+                                >
+                                  <ImagePlus className="h-4 w-4" />
+                                  Add images ({postImages.length}/4)
+                                </Button>
+                              </>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              JPG, PNG, or WebP. Max 5MB per image.
+                            </p>
+                          </div>
+                          
                           {/* Announcement toggle removed — announcements are managed via Admin Panel */}
                           <DialogFooter className="gap-2 sm:gap-0">
                             <Button
                               type="button"
                               variant="outline"
-                              onClick={() => setPostDialogOpen(false)}
+                              onClick={() => {
+                                setPostDialogOpen(false)
+                                setPostImages([])
+                              }}
                             >
                               Cancel
                             </Button>
@@ -898,7 +1064,9 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               disabled={
                                 createPostMutation.isPending ||
                                 !postForm.title.trim() ||
-                                !postForm.content.trim()
+                                !postForm.content.trim() ||
+                                isUploadingImage ||
+                                postImages.some(img => !img.url)
                               }
                             >
                               {createPostMutation.isPending ? 'Posting…' : 'Post'}
@@ -976,17 +1144,12 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                               {post.imageUrls && post.imageUrls.length > 0 && (
                                 <div className="flex flex-wrap gap-2 pt-2">
                                   {post.imageUrls.map((url, i) => (
-                                    <div
+                                    <ExpandableImage
                                       key={i}
-                                      className="relative h-24 w-24 overflow-hidden rounded-md bg-muted"
-                                    >
-                                      <Image
-                                        src={url}
-                                        alt=""
-                                        fill
-                                        className="object-cover"
-                                      />
-                                    </div>
+                                      src={url}
+                                      alt={`${post.title || 'Post'} image ${i + 1}`}
+                                      className="h-24 w-24 rounded-md"
+                                    />
                                   ))}
                                 </div>
                               )}
@@ -1013,6 +1176,15 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                                 <span>{post.upvoteCount}</span>
                               </Button>
                             </CardFooter>
+                            {/* Comments Section */}
+                            {currentUserData && (
+                              <div className="border-t px-6 pb-4">
+                                <CommentThread
+                                  postId={post.id}
+                                  currentUserId={currentUserData.id}
+                                />
+                              </div>
+                            )}
                           </Card>
                         </li>
                       ))}

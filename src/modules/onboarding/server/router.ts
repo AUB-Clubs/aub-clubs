@@ -4,6 +4,7 @@ import { createTRPCRouter } from "@/trpc/init";
 import { prisma } from "@/lib/prisma";
 import { authProcedure } from "@/modules/auth/server/middleware";
 import { onboardingSchema } from "../lib/validations";
+import { moderateText, validateBioNoLinks } from "@/modules/moderation/server/moderation";
 
 export const onboardingRouter = createTRPCRouter({
   /**
@@ -30,6 +31,37 @@ export const onboardingRouter = createTRPCRouter({
         throw new TRPCError({
           code: "CONFLICT",
           message: "This AUB ID is already registered to another account",
+        });
+      }
+
+      // Validate bio doesn't contain URLs
+      try {
+        validateBioNoLinks(input.bio);
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        console.error("Unexpected validation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to validate bio. Please try again later.",
+        });
+      }
+
+      // Moderate bio content
+      try {
+        await moderateText(input.bio, {
+          throwOnUnsafe: true,
+          textThreshold: 0.02,
+        });
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify content safety. Please try again later.",
         });
       }
 

@@ -34,6 +34,7 @@ export const discoverRouter = createTRPCRouter({
         const posts = await prisma.post.findMany({
           where: {
             clubId: { in: recommendedClubIds },
+            status: "PUBLISHED",
           },
           orderBy: [
             { type: "desc" }, // ANNOUNCEMENT first
@@ -120,6 +121,7 @@ export const discoverRouter = createTRPCRouter({
       const posts = await prisma.post.findMany({
         where: {
           createdAt: { gte: thirtyDaysAgo },
+          status: "PUBLISHED",
         },
         include: {
           club: {

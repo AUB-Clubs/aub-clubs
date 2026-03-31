@@ -8,6 +8,7 @@ import { recommendationsRouter } from '../../modules/Recommendations/server/rout
 import { authRouter } from '../../modules/auth/server/router';
 import { onboardingRouter } from '../../modules/onboarding/server/router';
 import { moderationRouter } from '../../modules/moderation/server/router';
+import { postsRouter } from '../../modules/posts/server/router';
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -19,6 +20,7 @@ export const appRouter = createTRPCRouter({
   commitmentLevel: commitmentLevelRouter,
   recommendations: recommendationsRouter,
   moderation: moderationRouter,
+  posts: postsRouter,
 });
 
 export type AppRouter = typeof appRouter;

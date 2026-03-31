@@ -6,7 +6,7 @@ import { trpc } from '@/trpc/client'
 import { useInView } from 'react-intersection-observer'
 import { PostCard } from './PostCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Button } from '@/components/ui/button'
 import { Compass } from 'lucide-react'
@@ -43,6 +43,7 @@ function PostCardSkeleton() {
 
 export function DiscoverFeedTab() {
   const { ref, inView } = useInView()
+  const profileQuery = trpc.profile.get.useQuery(undefined, { staleTime: 5 * 60 * 1000 })
 
   const discoverQuery = trpc.discover.getDiscoverFeed.useInfiniteQuery(
     { limit: 12 },
@@ -126,6 +127,7 @@ export function DiscoverFeedTab() {
           post={post}
           variant="discover"
           showJoinButton={true}
+          currentUserId={profileQuery.data?.id}
         />
       ))}
 

@@ -108,6 +108,8 @@ model User {
   upvotes             Upvote[]
   eventRegistrations  EventRegistration[]
   performedAudits     MembershipAuditLog[] @relation("AuditActor")
+  comments            Comment[]
+  commentLikes        CommentLike[]
 
   @@map("users")
 }
@@ -196,6 +198,7 @@ model Post {
   club       Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
   postImages PostImage[]
   upvotes    Upvote[]
+  comments   Comment[]
 
   // Fast filtering by Club, Status, Audience, and Date
   @@index([clubId, status, audience, createdAt(sort: Desc)]) 
@@ -276,4 +279,52 @@ model EventRegistration {
   @@unique([userId, eventId])
   @@index([eventId, status])
   @@map("event_registrations")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  authorId  String   @map("author_id")
+  parentId  String?  @map("parent_id")  // NULL = top-level comment
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id])
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  images    CommentImage[]
+  likes     CommentLike[]
+  
+  @@index([postId, createdAt(sort: Desc)])
+  @@index([parentId, createdAt(sort: Asc)])
+  @@map("comments")
+}
+
+model CommentImage {
+  id        String   @id @default(uuid())
+  commentId String   @map("comment_id")
+  imageUrl  String   @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@index([commentId])
+  @@map("comment_images")
+}
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  commentId String   @map("comment_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, commentId])
+  @@index([commentId])
+  @@map("comment_likes")
 }
