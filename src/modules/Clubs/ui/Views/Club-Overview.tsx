@@ -570,6 +570,14 @@ export default function ClubOverview({ clubId }: ClubOverviewProps) {
                   <Badge variant="secondary" className="w-fit text-sm font-medium">
                     {role ? roleLabels[role] ?? role : 'Member'}
                   </Badge>
+                  {clubId && (
+                    <Button size="sm" variant="outline" className="gap-1.5" asChild>
+                      <Link href={`/clubs/${clubId}/calendar`}>
+                        <CalendarDays className="size-4" />
+                        Preview Calendar
+                      </Link>
+                    </Button>
+                  )}
                   {canPostAnnouncement && (
                     <Button size="sm" variant="outline" className="gap-1.5" asChild>
                       <Link href={`/clubs/${clubId}/admin`}>

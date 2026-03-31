@@ -24,6 +24,7 @@ import {
   Users,
   ClipboardList,
   Compass,
+  Calendar,
   LogOut,
 } from 'lucide-react';
 import { createClient } from '@/modules/auth/lib/supabase-client';
@@ -56,6 +57,7 @@ export function AppSidebar() {
   const items = [
     { title: "Discover", url: "/discover", icon: Compass },
     { title: "My Clubs", url: "/me", icon: Home },
+    { title: "Calendar", url: "/calendar", icon: Calendar },
     { title: "Clubs", url: "/clubs", icon: Users },
   ];
 

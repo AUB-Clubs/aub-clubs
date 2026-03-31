@@ -147,11 +147,10 @@ export function EventsSection({ clubId }: { clubId: string }) {
                     <span>{new Date(event.startsAt).toLocaleString()}</span>
                     {event.location && <span className="flex items-center gap-1"><MapPin className="size-3"/> {event.location}</span>}
                   </div>
-                  <div className="text-sm pt-2 flex gap-4">
-                     <span className="text-primary">{event.registeredCount} Registered</span>
-                     <span className="text-muted-foreground">{event.waitlistCount} Waitlist</span>
-                     <span className="text-green-600">{event.checkedInCount} Checked In</span>
-                  </div>
+                   <div className="text-sm pt-2 flex gap-4">
+                      <span className="text-primary">{event.registeredCount} Registered</span>
+                      <span className="text-green-600">{event.checkedInCount} Checked In</span>
+                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setSelectedEventId(event.id)}>

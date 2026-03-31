@@ -116,10 +116,11 @@ import { AnalyticsSection } from '../components/AdminAnalyticsSection'
 
 export interface AdminPanelProps {
   clubId: string
+  initialSection?: 'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null
 }
 
-export default function AdminPanel({ clubId }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null>(null)
+export default function AdminPanel({ clubId, initialSection = null }: AdminPanelProps) {
+  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null>(initialSection)
 
   // Auth check: only president / vice can access
   const membershipQuery = trpc.clubs.getMembership.useQuery(
@@ -592,9 +593,14 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
               </p>
             </div>
           </div>
-          <Button variant="default" size="sm" className="w-fit rounded-lg" asChild>
-            <Link href={`/clubs/${clubId}`}>Back to club</Link>
-          </Button>
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+            <Button variant="outline" size="sm" className="w-fit rounded-lg" asChild>
+              <Link href={`/clubs/${clubId}/admin/calendar`}>Calendar workspace</Link>
+            </Button>
+            <Button variant="default" size="sm" className="w-fit rounded-lg" asChild>
+              <Link href={`/clubs/${clubId}`}>Back to club</Link>
+            </Button>
+          </div>
         </div>
 
         {/* Section Cards (home) */}
