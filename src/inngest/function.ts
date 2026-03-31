@@ -1,4 +1,4 @@
-import { openai, createAgent, createTool, createNetwork, Tool, Message, createState } from "@inngest/agent-kit"
+import { openai, createAgent, createTool, createNetwork, Message, createState } from "@inngest/agent-kit"
 import { inngest } from "./client"
 import { lastAssistantTextMessageContent } from "./utils"
 import z from "zod"
@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma"
 
 interface  AgentState {
   summary: string;
-  files: {[path:string]:string};
 }
 
 export const eventFunction = inngest.createFunction(
@@ -43,7 +42,6 @@ export const eventFunction = inngest.createFunction(
     const state = createState<AgentState>(
       {
         summary: "",
-        files:{}
       },
       {
         messages:previousMessages,
@@ -51,96 +49,83 @@ export const eventFunction = inngest.createFunction(
     )
 
     const codeAgent = createAgent<AgentState>({
-      name: "code-agent",
-      description: "An expert coding agent",
+      name: "event-agent",
+      description: "An expert event management agent",
       system: PROMPT,
       model: openai({ 
-        model: "gpt-5-mini"
+        model: "gpt-5.4"
       }),
       tools :[
         createTool({
-          name:"terminal",
-          description: "Use the terminal to run commands",
+          name: "queryRAG",
+          description: "Query the vector database for speakers or sponsors related to the project",
           parameters: z.object({
-            command: z.string(),
+            query: z.string().describe("The search query"),
+            type: z.enum(["speakers", "sponsors"]).describe("Which collection to query")
           }),
-          handler : async ({command}, {step}) => {
-            return await step?.run("terminal", async () =>{
-              const buffers = {stdout: "", stderr: ""}
-
-              try {
-                const sandbox = await getSandbox(SandboxId)
-                console.log("hi")
-                const result = await sandbox.commands.run(command, {
-                  onStdout: (data: string) => {
-                    buffers.stdout += data
-                  },
-                  onStderr: (data: string) => {
-                    buffers.stderr += data
-                  }
-                })
-                return result.stdout
-              } catch (e) {
-                console.error(
-                  `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`
-                )
-                return `Command failed: ${e} \nstdout: ${buffers.stdout}\nstderror: ${buffers.stderr}`
-              }
-            })
+          handler: async ({query, type}, {step}) => {
+            return await step?.run(`ragSearch-${type}`, async () => {
+                 const { supabase } = await import("@/lib/RAG/config");
+                 const { createEmbedding } = await import("@/lib/RAG/utils");
+                 const embedding = await createEmbedding(query);
+                 const rpcName = type === "speakers" ? "match_speakers" : "match_sponsors";
+                 const { data, error } = await supabase.rpc(rpcName as any, {
+                   query_embedding: embedding,
+                   match_threshold: 0.5,
+                   match_count: 5
+                 });
+                 if (error) return "Error querying RAG: " + error.message;
+                 if (!data || data.length === 0) return "No results found.";
+                 return data.map((d: any) => d.content).join("\n\n");
+            });
           }
         }),
         createTool({
-          name: "createOrUpdateFiles",
-          description: "Create or update files in the sandbox",
+          name: "webSearch",
+          description: "Search the web for real-time information",
           parameters: z.object({
-            files: z.array(
-              z.object({
-                path: z.string(),
-                content: z.string(),
-              }),
-            )
+            query: z.string().describe("The search query")
           }),
-          handler: async ({files}, {step, network}: Tool.Options<AgentState>) => {
-            const newFiles = await step?.run("createOrUpdateFiles", async () => {
+          handler: async ({query}, {step}) => {
+            return await step?.run("web-search", async () => {
               try {
-                const updatedFiles = network.state.data.files || {}
-                const sandbox = await getSandbox(SandboxId)
-                for (const file of files) {
-                  await sandbox.files.write(file.path, file.content)
-                  updatedFiles[file.path] = file.content
-                }
-
-                return updatedFiles
-              } catch (e) {
-                return "Error: "+e
+                const cheerio = await import("cheerio");
+                const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+                const html = await res.text();
+                const $ = cheerio.load(html);
+                const results: any[] = [];
+                $(".result__body").each((i, el) => {
+                  if (i >= 5) return; // Limit to top 5
+                  results.push({
+                    title: $(el).find(".result__title").text().trim(),
+                    snippet: $(el).find(".result__snippet").text().trim(),
+                    link: $(el).find(".result__url").text().trim()
+                  });
+                });
+                return JSON.stringify({ results }, null, 2);
+              } catch (e: any) {
+                return "Web search failed: " + e.message;
               }
-            })
-
-            if (typeof newFiles === "object") {
-              network.state.data.files = newFiles
-            }
+            });
           }
         }),
         createTool({
-          name: "readFiles",
-          description: "Read files from sandbox.",
-          parameters: z.object({
-            files: z.array(z.string()),
-          }),
-          handler: async ({files}, {step}) => {
-            return await step?.run("readFiles", async () =>{
+          name: "getEventsThisSemester",
+          description: "Get all the events in JSON that were done this semester",
+          parameters: z.object({}),
+          handler: async (_, {step}) => {
+            return await step?.run("get-events", async () => {
               try {
-                const sandbox = await getSandbox(SandboxId)
-                const contents = []
-                for (const file of files) {
-                  const content = await  sandbox.files.read(file)
-                  contents.push({path: file, content})
-                }
-                return JSON.stringify(contents)
-              } catch (e) {
-                return "Error: "+e
+                const events = await prisma.event.findMany({
+                   orderBy: { startsAt: "asc" },
+                   include: { club: { select: { title: true } } },
+                   take: 100
+                });
+                return JSON.stringify(events, null, 2);
+              } catch (e: any) {
+                return "Failed to fetch events: " + e.message;
               }
-            })
+            });
           }
         })
       ], 
@@ -186,8 +171,8 @@ export const eventFunction = inngest.createFunction(
     })
 
     const responseGenerator = createAgent({
-      name:"fragment-title-generator",
-      description: "A fragment title generator",
+      name:"response-generator",
+      description: "A response generator",
       system: RESPONSE_PROMPT,
       model: openai({
         model: "gpt-5-nano"
@@ -195,10 +180,11 @@ export const eventFunction = inngest.createFunction(
     })
 
     const {output: fragmentTitleOutput} = await fragmentTitleGenerator.run(result.state.data.summary) 
+    const {output: responseOutput} = await responseGenerator.run(result.state.data.summary)
 
     const generateFragmentTitle = () => {
       if (fragmentTitleOutput[0].type !== "text") {
-        return "Here you go."
+        return "Fragment"
       }
 
       if (Array.isArray(fragmentTitleOutput[0].content)) {
@@ -221,14 +207,7 @@ export const eventFunction = inngest.createFunction(
     }
 
     const isError = 
-      !result.state.data.summary || 
-      Object.keys(result.state.data.files || {}).length === 0
-
-    const sandboxUrl = await step.run("get-sandbox-url", async () => {
-      const sandbox = await getSandbox(SandboxId)
-      const host = sandbox.getHost(3000)
-      return `https://${host}`
-    })
+      !result.state.data.summary
 
     await step.run("save-result", async () =>{
 
@@ -246,14 +225,13 @@ export const eventFunction = inngest.createFunction(
       return await prisma.message.create({
         data: {
           projectId: event.data.projectId,
-          content: generateResponse(),
           role: "ASSISTANT",
           type: "RESULT",
+          content: generateResponse(),
           fragment: {
             create:{
-              sandboxUrl: sandboxUrl,
               title: generateFragmentTitle(),
-              files: result.state.data.files,
+              eventOutput: result.state.data.summary.replaceAll("<task_summary>", "").replaceAll("</task_summary>", ""),
             }
           }
         }
@@ -261,10 +239,8 @@ export const eventFunction = inngest.createFunction(
     })
 
     return {
-      url: sandboxUrl,
-      title: "Fragment",
-      files: result.state.data.files,
-      summary: result.state.data.summary
+      title: generateFragmentTitle(),
+      summary: result.state.data.summary.replaceAll("<task_summary>", "").replaceAll("</task_summary>", ""),
     }
   },
 )
