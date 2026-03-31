@@ -93,6 +93,14 @@ export async function uploadFileToSupabase(
   const client = injectedClient ?? getSupabaseClient()
   const contentType = file.type || undefined
 
+  const { data: userAuth } = await client.auth.getUser()
+  console.log("Supabase storage upload debug:", {
+    path,
+    injectedClient: !!injectedClient,
+    authUid: userAuth.user?.id,
+    expectedUserId: userId,
+  })
+
   const { data, error } = await client.storage.from(bucket).upload(path, file, {
     cacheControl,
     upsert,

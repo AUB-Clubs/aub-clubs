@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/trpc/client'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -57,7 +57,13 @@ import {
   ArrowLeft,
   Calendar,
   BarChart,
+  Settings2,
+  ImageIcon,
+  Upload,
+  Loader2,
+  Save,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -111,7 +117,7 @@ export interface AdminPanelProps {
 }
 
 export default function AdminPanel({ clubId }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | null>(null)
+  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null>(null)
 
   // Auth check: only president / vice can access
   const membershipQuery = trpc.clubs.getMembership.useQuery(
@@ -119,27 +125,23 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
     { enabled: !!clubId }
   )
 
-  const role = membershipQuery.data?.role
-  const status = membershipQuery.data?.status
-  const isAdmin = status === 'ACCEPTED' && (role === 'PRESIDENT' || role === 'VICE_PRESIDENT')
+  const actorRole = membershipQuery.data?.role ?? null
+  const isAdmin = actorRole === 'PRESIDENT' || actorRole === 'VICE_PRESIDENT'
 
-  // Loading state
+  // Not admin → redirect
   if (membershipQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/40">
-        <div className="mx-auto max-w-4xl p-6 space-y-6">
-          <Skeleton className="h-10 w-64" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32 rounded-2xl" />
-            ))}
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/40 flex items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <Skeleton className="h-6 w-48 mb-2" />
+            <Skeleton className="h-4 w-full" />
+          </CardHeader>
+        </Card>
       </div>
     )
   }
 
-  // Not admin → redirect
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/40 flex items-center justify-center p-6">
@@ -159,6 +161,395 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
       </div>
     )
   }
+
+function ClubProfileSection({ clubId }: { clubId: string }) {
+  const { data } = trpc.clubs.getOverview.useQuery({ clubId })
+  const club = data?.club
+  const utils = trpc.useUtils()
+  
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null)
+  const [description, setDescription] = useState('')
+  const [mission, setMission] = useState('')
+  const [instagramUrl, setInstagramUrl] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
+
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
+
+  // Initialize form with club data
+  useEffect(() => {
+    if (club) {
+      setDescription(club.description || '')
+      setMission(club.mission || '')
+      setInstagramUrl(club.instagramUrl || '')
+      setWebsiteUrl(club.websiteUrl || '')
+      setAvatarPreview(club.imageUrl || null)
+      setBannerPreview(club.bannerUrl || null)
+    }
+  }, [club])
+
+  const uploadAvatarMutation = trpc.clubs.uploadClubImage.useMutation()
+  const uploadBannerMutation = trpc.clubs.uploadClubBanner.useMutation()
+  const updateProfileMutation = trpc.clubs.updateClubProfile.useMutation({
+    onSuccess: () => {
+      utils.clubs.getOverview.invalidate({ clubId })
+      toast.success('Club profile updated successfully!')
+    },
+    onError: (error) => {
+      toast.error('Failed to update profile', {
+        description: error.message,
+      })
+    },
+  })
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please upload a JPG, PNG, or WebP image',
+      })
+      return
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large', {
+        description: 'Please upload an image smaller than 5MB',
+      })
+      return
+    }
+
+    setAvatarFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please upload a JPG, PNG, or WebP image',
+      })
+      return
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large', {
+        description: 'Please upload an image smaller than 5MB',
+      })
+      return
+    }
+
+    setBannerFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setBannerPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSave = async () => {
+    try {
+      // Upload avatar if changed
+      if (avatarFile) {
+        const reader = new FileReader()
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(avatarFile)
+        })
+        const base64 = await base64Promise
+        await uploadAvatarMutation.mutateAsync({
+          clubId,
+          base64Image: base64,
+          fileName: avatarFile.name,
+        })
+      }
+
+      // Upload banner if changed
+      if (bannerFile) {
+        const reader = new FileReader()
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(bannerFile)
+        })
+        const base64 = await base64Promise
+        await uploadBannerMutation.mutateAsync({
+          clubId,
+          base64Image: base64,
+          fileName: bannerFile.name,
+        })
+      }
+
+      // Update profile with text fields (images are updated directly by the upload mutations)
+      await updateProfileMutation.mutateAsync({
+        clubId,
+        description: description || undefined,
+        mission: mission || undefined,
+        instagramUrl: instagramUrl || null,
+        websiteUrl: websiteUrl || null,
+      })
+
+      // Reset file states
+      setAvatarFile(null)
+      setBannerFile(null)
+    } catch (error) {
+      // Error handling is done in mutation callbacks
+      console.error('Profile update error:', error)
+    }
+  }
+
+  const isLoading = uploadAvatarMutation.isPending || uploadBannerMutation.isPending || updateProfileMutation.isPending
+  const hasChanges = avatarFile || bannerFile || 
+    description !== (club?.description || '') ||
+    mission !== (club?.mission || '') ||
+    instagramUrl !== (club?.instagramUrl || '') ||
+    websiteUrl !== (club?.websiteUrl || '')
+
+  if (!club) {
+    return <div className="text-muted-foreground">Loading club data...</div>
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold">Club Profile</h2>
+          <p className="text-muted-foreground">
+            Update your club&apos;s avatar, banner, and information
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {/* Avatar Upload */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Club Avatar</CardTitle>
+            <CardDescription>
+              Upload a square image (recommended: 400x400px)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-6">
+              <div className="relative size-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Avatar preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="size-8 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={isLoading}
+                >
+                  <Upload className="size-4 mr-2" />
+                  Choose Image
+                </Button>
+                {avatarPreview && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setAvatarFile(null)
+                      setAvatarPreview(club.imageUrl || null)
+                    }}
+                    disabled={isLoading}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Banner Upload */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Club Banner</CardTitle>
+            <CardDescription>
+              Upload a wide image (recommended: 1200x300px)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <div className="relative w-full h-32 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                {bannerPreview ? (
+                  <img
+                    src={bannerPreview}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="size-8 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={isLoading}
+                >
+                  <Upload className="size-4 mr-2" />
+                  Choose Image
+                </Button>
+                {bannerPreview && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setBannerFile(null)
+                      setBannerPreview(club.bannerUrl || null)
+                    }}
+                    disabled={isLoading}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleBannerChange}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Description */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Description</CardTitle>
+            <CardDescription>
+              Brief overview of your club (max 500 characters)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value.slice(0, 500))}
+              placeholder="Enter club description..."
+              rows={4}
+              disabled={isLoading}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              {description.length}/500 characters
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Mission */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Mission Statement</CardTitle>
+            <CardDescription>
+              Your club&apos;s mission and goals (max 500 characters)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={mission}
+              onChange={(e) => setMission(e.target.value.slice(0, 500))}
+              placeholder="Enter mission statement..."
+              rows={4}
+              disabled={isLoading}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              {mission.length}/500 characters
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Social Links */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Social Links</CardTitle>
+            <CardDescription>
+              Add your club&apos;s social media and website
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="instagram">Instagram URL</Label>
+              <Input
+                id="instagram"
+                type="url"
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                placeholder="https://instagram.com/yourclub"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="website">Website URL</Label>
+              <Input
+                id="website"
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://yourclub.com"
+                disabled={isLoading}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isLoading || !hasChanges}
+            size="lg"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="size-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="size-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </>
+  )
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/40">
@@ -188,7 +579,9 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
                         ? 'Events'
                         : activeSection === 'analytics'
                           ? 'Analytics'
-                          : 'Admin Panel'}
+                          : activeSection === 'profile'
+                            ? 'Club Profile'
+                            : 'Admin Panel'}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {activeSection
@@ -299,12 +692,31 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
                 </CardContent>
               </Card>
             </button>
+
+            <button
+              onClick={() => setActiveSection('profile')}
+              className="group text-left"
+            >
+              <Card className="h-full rounded-2xl border-0 bg-card/80 shadow-sm ring-1 ring-border/50 transition-all hover:shadow-md hover:ring-violet-500/30 cursor-pointer">
+                <CardContent className="flex flex-col items-start gap-3 pt-6">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-violet-500/10 transition-colors group-hover:bg-violet-500/20">
+                    <Settings2 className="size-6 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Club Profile</p>
+                    <p className="text-sm text-muted-foreground">
+                      Edit club info, images, and links
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
           </div>
         )}
 
         {/* Section content */}
         {activeSection === 'members' && (
-          <MembersSection clubId={clubId} actorRole={role!} />
+          <MembersSection clubId={clubId} actorRole={actorRole!} />
         )}
         {activeSection === 'requests' && (
           <RequestsSection clubId={clubId} />
@@ -317,6 +729,9 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
         )}
         {activeSection === 'analytics' && (
           <AnalyticsSection clubId={clubId} />
+        )}
+        {activeSection === 'profile' && (
+          <ClubProfileSection clubId={clubId} />
         )}
       </div>
     </div>

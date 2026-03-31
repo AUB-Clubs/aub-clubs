@@ -1,7 +1,26 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter } from '../../../trpc/init';
 import { prisma } from '@/lib/prisma';
-import { protectedProcedure } from '@/modules/auth/server/middleware';
+import { protectedProcedure, authProcedure } from '@/modules/auth/server/middleware';
+import { moderateImage } from '@/modules/moderation/server/moderation';
+import { uploadFileToSupabase } from '@/lib/supabase-storage';
+
+function base64ToBlob(base64: string): Blob {
+  const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+  const byteString = atob(base64Data);
+  const arrayBuffer = new ArrayBuffer(byteString.length);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  
+  for (let i = 0; i < byteString.length; i++) {
+    uint8Array[i] = byteString.charCodeAt(i);
+  }
+  
+  const mimeTypeMatch = base64.match(/^data:(image\/\w+);base64,/);
+  const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg";
+  
+  return new Blob([arrayBuffer], { type: mimeType });
+}
 
 /**
  * Student profile backend.
@@ -160,5 +179,47 @@ export const profileRouter = createTRPCRouter({
         },
       });
       return updated;
+    }),
+
+  uploadProfileImage: authProcedure
+    .input(
+      z.object({
+        base64Image: z.string(),
+        fileName: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Moderate image
+      try {
+        await moderateImage(input.base64Image, {
+          throwOnUnsafe: true,
+          imageThreshold: 0.3,
+        });
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify image safety. Please try again later.",
+        });
+      }
+
+      // Convert base64 to Blob
+      const blob = base64ToBlob(input.base64Image);
+
+      // Upload to Supabase using ctx.supabase
+      const result = await uploadFileToSupabase({
+        file: blob,
+        userId: ctx.user.id,
+        folder: "avatars",
+        fileName: input.fileName,
+        supabaseClient: ctx.supabase,
+      });
+
+      return {
+        imageUrl: result.publicUrl,
+      };
     }),
 });

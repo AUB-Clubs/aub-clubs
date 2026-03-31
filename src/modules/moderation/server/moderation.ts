@@ -301,6 +301,24 @@ export async function moderateBoth(
 }
 
 /**
+ * Validate that bio text does not contain URLs
+ * 
+ * @param bio - The bio text to validate
+ * @throws TRPCError if bio contains URLs
+ */
+export function validateBioNoLinks(bio: string): void {
+  // Comprehensive URL detection regex
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9][a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/gi;
+  
+  if (urlRegex.test(bio)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "URLs are not allowed in bios. Please remove any links.",
+    });
+  }
+}
+
+/**
  * Moderate content with automatic detection of content type
  * Always rejects content if moderation service is unavailable (fail-safe approach)
  * 
