@@ -12,7 +12,7 @@ ENV HF_HOME=/app/.cache/huggingface
 RUN uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Copy dependency files (include lockfile for deterministic GKE deployments)
-COPY pyproject.toml uv.lock* ./
+COPY inference/pyproject.toml inference/uv.lock* ./
 
 # Install dependencies globally
 RUN uv pip install --system --no-cache .
@@ -23,7 +23,7 @@ RUN python -c "from transformers import pipeline; \
     pipeline('image-classification', model='OwenElliott/image-safety-classifier-s')"
 
 # Copy application code
-COPY main.py .
+COPY inference/main.py .
 
 EXPOSE 8080
 
