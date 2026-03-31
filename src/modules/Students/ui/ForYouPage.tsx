@@ -17,8 +17,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ExpandableImage } from '@/components/ui/expandable-image'
 import { Megaphone, FileText, Users, Heart } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CommentThread } from '@/modules/posts/ui/components'
 
 function UpvoteButton({ postId, initialCount, initialLiked }: { postId: string, initialCount: number, initialLiked: boolean }) {
   const [count, setCount] = useState(initialCount)
@@ -94,6 +96,7 @@ export default function ForYouPage() {
   const items = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
   const isLoading = feedQuery.isLoading
   const isEmpty = !isLoading && items.length === 0
+  const currentUserId = profile?.id
 
   return (
     <div className="w-full">
@@ -213,11 +216,28 @@ export default function ForYouPage() {
                           <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                             {a.content}
                           </p>
+                          {a.imageUrls && a.imageUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {a.imageUrls.map((url: string, i: number) => (
+                                <ExpandableImage
+                                  key={`${a.id}-${i}`}
+                                  src={url}
+                                  alt={`${a.title} image ${i + 1}`}
+                                  className="h-20 w-20 rounded-md"
+                                />
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                         <CardFooter className="flex items-center justify-between pt-0 text-xs text-muted-foreground">
                           <span>{formatRelativeTime(a.created_at)}</span>
                           <UpvoteButton postId={a.id} initialCount={a.upvotes_count} initialLiked={a.has_upvoted} />
                         </CardFooter>
+                        {currentUserId && (
+                          <div className="border-t px-6 pb-4">
+                            <CommentThread postId={a.id} currentUserId={currentUserId} />
+                          </div>
+                        )}
                       </Card>
                     </li>
                   )
@@ -259,11 +279,28 @@ export default function ForYouPage() {
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                           {p.content}
                         </p>
+                        {p.imageUrls && p.imageUrls.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {p.imageUrls.map((url: string, i: number) => (
+                              <ExpandableImage
+                                key={`${p.id}-${i}`}
+                                src={url}
+                                alt={`${p.title || 'Post'} image ${i + 1}`}
+                                className="h-20 w-20 rounded-md"
+                              />
+                            ))}
+                          </div>
+                        )}
                       </CardContent>
                       <CardFooter className="flex items-center justify-between pt-0 text-xs text-muted-foreground">
                         <span>{formatRelativeTime(p.created_at)}</span>
                         <UpvoteButton postId={p.id} initialCount={p.upvotes_count} initialLiked={p.has_upvoted} />
                       </CardFooter>
+                      {currentUserId && (
+                        <div className="border-t px-6 pb-4">
+                          <CommentThread postId={p.id} currentUserId={currentUserId} />
+                        </div>
+                      )}
                     </Card>
                   </li>
                 )

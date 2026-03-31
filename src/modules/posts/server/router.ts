@@ -264,7 +264,7 @@ export const postsRouter = createTRPCRouter({
       try {
         await moderateText(input.content, {
           throwOnUnsafe: true,
-          textThreshold: 0.05,
+          textThreshold: 0.02,
         });
       } catch (error: unknown) {
         if (error instanceof TRPCError) {

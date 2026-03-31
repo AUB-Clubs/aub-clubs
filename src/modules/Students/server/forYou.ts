@@ -39,6 +39,7 @@ export const forYouRouter = createTRPCRouter({
         const posts = await prisma.post.findMany({
           where: {
             clubId: { in: clubIds },
+            status: "PUBLISHED",
             ...(filter !== 'ALL' ? { type: filter as 'ANNOUNCEMENT' | 'GENERAL' } : {})
           },
           orderBy: [
@@ -61,6 +62,7 @@ export const forYouRouter = createTRPCRouter({
                 avatarUrl: true,
               }
             },
+            postImages: { select: { imageUrl: true } },
             _count: { select: { upvotes: true } },
             upvotes: { where: { userId }, select: { id: true } },
           },
@@ -93,7 +95,8 @@ export const forYouRouter = createTRPCRouter({
             },
             upvotes_count: p._count.upvotes,
             has_upvoted: p.upvotes.length > 0,
-            priority: p.priority
+            priority: p.priority,
+            imageUrls: p.postImages.map((img) => img.imageUrl),
           },
         }));
 

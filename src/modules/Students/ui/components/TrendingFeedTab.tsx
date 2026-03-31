@@ -1,14 +1,12 @@
 'use client'
 
 import { useEffect } from 'react'
-import Link from 'next/link'
 import { trpc } from '@/trpc/client'
 import { useInView } from 'react-intersection-observer'
 import { PostCard } from './PostCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Button } from '@/components/ui/button'
 import { Flame } from 'lucide-react'
 
 // ── Loading Skeleton ───────────────────────────────────────────────────
@@ -43,6 +41,7 @@ function PostCardSkeleton() {
 
 export function TrendingFeedTab() {
   const { ref, inView } = useInView()
+  const profileQuery = trpc.profile.get.useQuery(undefined, { staleTime: 5 * 60 * 1000 })
 
   const trendingQuery = trpc.discover.getTrendingPosts.useInfiniteQuery(
     { limit: 12 },
@@ -121,6 +120,7 @@ export function TrendingFeedTab() {
           post={post}
           variant="trending"
           showJoinButton={true}
+          currentUserId={profileQuery.data?.id}
         />
       ))}
 
