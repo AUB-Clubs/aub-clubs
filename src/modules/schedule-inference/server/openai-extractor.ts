@@ -1,7 +1,21 @@
 import OpenAI from "openai";
 import { extractedSchedulePayloadSchema, type ExtractedScheduleItem } from "./validations";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Missing OPENAI_API_KEY for schedule inference");
+  }
+
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey });
+  }
+
+  return openaiClient;
+}
 
 function extractJsonBlock(raw: string): string {
   const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -15,7 +29,7 @@ export async function inferScheduleFromImage(params: {
 }): Promise<ExtractedScheduleItem[]> {
   const dataUrl = `data:${params.mimeType};base64,${params.base64Image}`;
 
-  const response = await openai.responses.create({
+  const response = await getOpenAIClient().responses.create({
     model: process.env.OPENAI_MODEL ?? "gpt-5.4",
     input: [
       {
