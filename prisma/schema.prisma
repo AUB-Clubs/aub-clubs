@@ -88,6 +88,18 @@ enum EventRegistrationStatus {
   CHECKED_IN
 }
 
+enum ScheduleItemType {
+  COURSE
+  CUSTOM
+}
+
+enum ScheduleInferenceStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REJECTED
+}
+
 // --------------------
 // Models
 // --------------------
@@ -118,6 +130,7 @@ model User {
   eventRegistrations  EventRegistration[]
   performedAudits     MembershipAuditLog[] @relation("AuditActor")
   schedules       UserSchedule[]
+  scheduleInferenceJobs ScheduleInferenceJob[]
   comments            Comment[]
   commentLikes        CommentLike[]
   
@@ -129,8 +142,12 @@ model Club {
   crn         Int     @unique
   title       String
   description String
+  mission     String?
   imageUrl    String? @map("image_url")
   bannerUrl   String? @map("banner_url")
+  instagramUrl String? @map("instagram_url")
+  websiteUrl   String? @map("website_url")
+  defaultEventColor String? @default("#2563EB") @map("default_event_color")
 
   types ClubType[] // Cloud Native PG handles scalar arrays natively
 
@@ -138,6 +155,7 @@ model Club {
   memberships Membership[]
   posts       Post[]
   events      ClubEvent[]
+  scheduledEvents Event[]
 
   @@map("clubs")
 }
@@ -242,6 +260,9 @@ model UserSchedule {
   id         String    @id @default(uuid())
   userId     String    @map("user_id")
   courseCode String    @map("course_code")
+  type       ScheduleItemType @default(COURSE)
+  color      String?   @default("#1D4ED8")
+  isRecurring Boolean  @default(true) @map("is_recurring")
   dayOfWeek  DayOfWeek @map("day_of_week")
   startTime  DateTime  @map("start_time")
   endTime    DateTime  @map("end_time")
@@ -249,6 +270,23 @@ model UserSchedule {
 
   @@index([userId])
   @@map("user_schedules")
+}
+
+model ScheduleInferenceJob {
+  id            String                  @id @default(uuid())
+  userId        String                  @map("user_id")
+  sourceMimeType String                 @map("source_mime_type")
+  sourceBase64  String                  @map("source_base64")
+  extractedJson Json?                   @map("extracted_json")
+  status        ScheduleInferenceStatus @default(PENDING)
+  errorMessage  String?                 @map("error_message")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("schedule_inference_jobs")
 }
 
 model ClubEvent {
@@ -275,6 +313,8 @@ model Event {
 
   startsAt     DateTime @map("starts_at")
   endsAt       DateTime? @map("ends_at")
+  color        String?  @default("#2563EB")
+  isRecurring  Boolean  @default(false) @map("is_recurring")
 
   capacity     Int?
   waitlistEnabled Boolean @default(true) @map("waitlist_enabled")
@@ -285,9 +325,26 @@ model Event {
   // Relations
   club          Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
   registrations EventRegistration[]
+  overlapCache  EventOverlapCache?
 
   @@index([clubId, startsAt(sort: Asc)])
   @@map("events")
+}
+
+model EventOverlapCache {
+  id                     String   @id @default(uuid())
+  eventId                String   @unique @map("event_id")
+  fullOverlapPercentage  Float    @map("full_overlap_percentage")
+  partialOverlapPercentage Float  @map("partial_overlap_percentage")
+  noOverlapPercentage    Float    @map("no_overlap_percentage")
+  totalMembers           Int      @map("total_members")
+  calculatedAt           DateTime @default(now()) @map("calculated_at")
+  expiresAt              DateTime @map("expires_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("event_overlap_cache")
 }
 
 model EventRegistration {

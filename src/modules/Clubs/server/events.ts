@@ -40,6 +40,8 @@ const EventInput = z.object({
   location: z.string().min(1).max(500).optional().nullable(),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date().optional().nullable(),
+  color: z.string().regex(/^#([A-Fa-f0-9]{6})$/).optional().nullable(),
+  isRecurring: z.boolean().optional().default(false),
   capacity: z.number().int().min(0).optional().nullable(),
   waitlistEnabled: z.boolean().optional().default(true),
 });
@@ -51,6 +53,7 @@ const EventItemSchema = z.object({
   location: z.string().nullable(),
   startsAt: z.string(),
   endsAt: z.string().nullable(),
+  color: z.string().nullable(),
   capacity: z.number().int().nullable(),
   waitlistEnabled: z.boolean(),
 
@@ -89,6 +92,7 @@ export const eventsRouter = createTRPCRouter({
             location: true,
             startsAt: true,
             endsAt: true,
+            color: true,
             capacity: true,
             waitlistEnabled: true,
           },
@@ -104,6 +108,7 @@ export const eventsRouter = createTRPCRouter({
             location: true,
             startsAt: true,
             endsAt: true,
+            color: true,
             capacity: true,
             waitlistEnabled: true,
           },
@@ -148,6 +153,7 @@ export const eventsRouter = createTRPCRouter({
               startsAt: e.startsAt.toISOString(),
               endsAt: e.endsAt?.toISOString() ?? null,
               capacity: capacity,
+              color: e.color ?? "#2563EB",
               waitlistEnabled: e.waitlistEnabled,
               registeredCount,
               checkedInCount,
@@ -222,6 +228,35 @@ export const eventsRouter = createTRPCRouter({
       return { status };
     }),
 
+  cancelRsvp: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const registration = await prisma.eventRegistration.findUnique({
+        where: { userId_eventId: { userId: ctx.user.id, eventId: input.eventId } },
+        include: {
+          event: {
+            select: { clubId: true },
+          },
+        },
+      });
+
+      if (!registration) {
+        return { ok: true };
+      }
+
+      await requireAcceptedMember(ctx.user, registration.event.clubId);
+
+      await prisma.eventRegistration.delete({
+        where: { userId_eventId: { userId: ctx.user.id, eventId: input.eventId } },
+      });
+
+      return { ok: true };
+    }),
+
   // Admin-only event check-in
   checkIn: protectedProcedure
     .input(
@@ -276,6 +311,8 @@ export const eventsRouter = createTRPCRouter({
           location: input.location ?? null,
           startsAt: input.startsAt,
           endsAt: input.endsAt ?? null,
+          color: input.color ?? null,
+          isRecurring: input.isRecurring,
           capacity: input.capacity ?? null,
           waitlistEnabled: input.waitlistEnabled,
         },
@@ -308,6 +345,8 @@ export const eventsRouter = createTRPCRouter({
           location: input.location ?? null,
           startsAt: input.startsAt,
           endsAt: input.endsAt ?? null,
+          color: input.color ?? null,
+          isRecurring: input.isRecurring,
           capacity: input.capacity ?? null,
           waitlistEnabled: input.waitlistEnabled,
         },
