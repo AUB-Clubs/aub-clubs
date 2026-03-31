@@ -6,7 +6,7 @@ import { fileURLToPath } from "url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-export async function findNearestMatchGoPluginDocs(embedding: Array<number>): Promise<string> {
+export async function findNearestMatchSponsors(embedding: Array<number>): Promise<string> {
   const { data } = await supabase.rpc('match_sponsors', {
     query_embedding: embedding,
     match_threshold: 0.75,
