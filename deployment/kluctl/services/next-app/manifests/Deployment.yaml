@@ -21,6 +21,8 @@ spec:
           env:
             - name: PORT
               value: "3000"
+            - name: INFERENCE_URL
+              value: "http://inference.aub-clubs.svc.cluster.local:8080"
           envFrom:
             - secretRef:
                 name: next-app-database-url

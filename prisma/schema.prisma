@@ -13,7 +13,7 @@ datasource db {
 
 enum ClubRole {
   MEMBER
-  BOARD         // Generic for logistics, treasurer, etc. (use customTitle for specifics)
+  BOARD // Generic for logistics, treasurer, etc. (use customTitle for specifics)
   VICE_PRESIDENT
   PRESIDENT
 }
@@ -43,6 +43,12 @@ enum PostType {
   GENERAL
 }
 
+enum AnnouncementPriority {
+  GENERAL
+  IMPORTANT
+  URGENT
+}
+
 enum PostStatus {
   DRAFT
   PUBLISHED
@@ -67,67 +73,109 @@ enum MembershipAction {
   REVOKED // If an admin kicks an active member
 }
 
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+enum EventRegistrationStatus {
+  REGISTERED
+  WAITLIST
+  CHECKED_IN
+}
+
+enum ScheduleItemType {
+  COURSE
+  CUSTOM
+}
+
+enum ScheduleInferenceStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REJECTED
+}
+
 // --------------------
 // Models
 // --------------------
 
 model User {
-  id              String               @id // Clerk User ID - populated via Clerk Webhooks
-  aubnetId        Int                  @unique @map("aubnet_id")
-  email           String               @unique
-  firstName       String               @map("first_name")
-  lastName        String               @map("last_name")
-  dob             DateTime             @map("dob")
-  bio             String?
-  avatarUrl       String?              @map("avatar_url")
-  major           String?
-  year            Int?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  emailVerified       Boolean   @default(false) @map("email_verified")
+  onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
+  
+  // Nullable until onboarding complete
+  aubnetId            Int?      @unique @map("aubnet_id")
+  firstName           String?   @map("first_name")
+  lastName            String?   @map("last_name")
+  dob                 DateTime? @map("dob")
+  major               String?   // Free text
+  year                Int?      // 1-4
+  bio                 String?   // Max 1000 chars
+  avatarUrl           String?   @map("avatar_url")
+  
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
   // Relations
-  memberships     Membership[]
-  posts           Post[]               @relation("AuthoredPosts")
-  upvotes         Upvote[]
-  performedAudits MembershipAuditLog[] @relation("AuditActor")
-
+  memberships         Membership[]
+  posts               Post[]               @relation("AuthoredPosts")
+  upvotes             Upvote[]
+  eventRegistrations  EventRegistration[]
+  performedAudits     MembershipAuditLog[] @relation("AuditActor")
+  schedules       UserSchedule[]
+  scheduleInferenceJobs ScheduleInferenceJob[]
+  comments            Comment[]
+  commentLikes        CommentLike[]
+  
   @@map("users")
 }
 
 model Club {
-  id              String           @id @default(uuid())
-  crn             Int              @unique
-  title           String
-  description     String
-  imageUrl        String?          @map("image_url")
-  bannerUrl       String?          @map("banner_url")
-  
-  types           ClubType[]       // Cloud Native PG handles scalar arrays natively
+  id          String  @id @default(uuid())
+  crn         Int     @unique
+  title       String
+  description String
+  mission     String?
+  imageUrl    String? @map("image_url")
+  bannerUrl   String? @map("banner_url")
+  instagramUrl String? @map("instagram_url")
+  websiteUrl   String? @map("website_url")
+  defaultEventColor String? @default("#2563EB") @map("default_event_color")
+
+  types ClubType[] // Cloud Native PG handles scalar arrays natively
 
   // Relations
-  memberships     Membership[]
-  posts           Post[]
+  memberships Membership[]
+  posts       Post[]
+  events      ClubEvent[]
+  scheduledEvents Event[]
 
   @@map("clubs")
 }
 
 model Membership {
-  id          String               @id @default(uuid())
-  userId      String               @map("user_id")
-  clubId      String               @map("club_id")
-  role        ClubRole             @default(MEMBER)
-  customTitle String?              @map("custom_title") // e.g., "Logistics Coordinator"
-  status      MembershipStatus     @default(PENDING)
-  joinedAt    DateTime             @default(now()) @map("joined_at")
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  clubId      String           @map("club_id")
+  role        ClubRole         @default(MEMBER)
+  customTitle String?          @map("custom_title") // e.g., "Logistics Coordinator"
+  status      MembershipStatus @default(PENDING)
+  joinedAt    DateTime         @default(now()) @map("joined_at")
 
   // Relations
-  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club        Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  auditLogs   MembershipAuditLog[]
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club      Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  auditLogs MembershipAuditLog[]
 
   @@unique([userId, clubId])
   @@index([clubId, status]) // Optimized for filtering active vs pending members
-  
   @@map("memberships")
 }
 
@@ -139,41 +187,44 @@ model MembershipAuditLog {
   createdAt    DateTime         @default(now()) @map("created_at")
 
   // Relations
-  membership   Membership       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  actor        User             @relation("AuditActor", fields: [actorId], references: [id])
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  actor      User       @relation("AuditActor", fields: [actorId], references: [id])
 
   // Fast chronological lookup for a user's request history in a specific club
-  @@index([membershipId, createdAt(sort: Desc)]) 
-  
+  @@index([membershipId, createdAt(sort: Desc)])
   @@map("membership_audit_logs")
 }
 
 model Post {
-  id         String       @id @default(uuid())
-  title      String
-  content    String
-  type       PostType     @default(GENERAL)
-  
+  id      String   @id @default(uuid())
+  title   String
+  content String
+  type    PostType @default(GENERAL)
+
   // Sprint 2 Additions
   status     PostStatus   @default(DRAFT)
   audience   PostAudience @default(PUBLIC)
+  pinnedAt   DateTime?    @map("pinned_at")
   
   createdAt  DateTime     @default(now()) @map("created_at")
   updatedAt  DateTime     @updatedAt @map("updated_at")
 
+  // Sprint 3 Addition
+  priority AnnouncementPriority @default(GENERAL)
+
   // Foreign Keys
-  authorId   String       @map("author_id")
-  clubId     String       @map("club_id")
+  authorId String @map("author_id")
+  clubId   String @map("club_id")
 
   // Relations
-  author     User         @relation("AuthoredPosts", fields: [authorId], references: [id])
-  club       Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  author     User        @relation("AuthoredPosts", fields: [authorId], references: [id])
+  club       Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
   postImages PostImage[]
   upvotes    Upvote[]
+  comments   Comment[]
 
   // Fast filtering by Club, Status, Audience, and Date
-  @@index([clubId, status, audience, createdAt(sort: Desc)]) 
-  
+  @@index([clubId, status, audience, createdAt(sort: Desc)])
   @@map("posts")
 }
 
@@ -186,8 +237,7 @@ model PostImage {
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  @@index([postId]) 
-  
+  @@index([postId])
   @@map("post_images")
 }
 
@@ -197,12 +247,170 @@ model Upvote {
   postId    String   @map("post_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, postId]) 
-  @@index([postId]) 
-  
+  @@unique([userId, postId])
+  @@index([postId])
   @@map("upvotes")
+}
+
+model UserSchedule {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  courseCode String    @map("course_code")
+  type       ScheduleItemType @default(COURSE)
+  color      String?   @default("#1D4ED8")
+  isRecurring Boolean  @default(true) @map("is_recurring")
+  dayOfWeek  DayOfWeek @map("day_of_week")
+  startTime  DateTime  @map("start_time")
+  endTime    DateTime  @map("end_time")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_schedules")
+}
+
+model ScheduleInferenceJob {
+  id            String                  @id @default(uuid())
+  userId        String                  @map("user_id")
+  sourceMimeType String                 @map("source_mime_type")
+  sourceBase64  String                  @map("source_base64")
+  extractedJson Json?                   @map("extracted_json")
+  status        ScheduleInferenceStatus @default(PENDING)
+  errorMessage  String?                 @map("error_message")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("schedule_inference_jobs")
+}
+
+model ClubEvent {
+  id        String    @id @default(uuid())
+  clubId    String    @map("club_id")
+  title     String
+  dayOfWeek DayOfWeek @map("day_of_week")
+  startTime DateTime  @map("start_time")
+  endTime   DateTime  @map("end_time")
+  location  String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  club      Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@map("club_events")
+}
+model Event {
+  id           String   @id @default(uuid())
+  clubId       String   @map("club_id")
+
+  title        String
+  description  String?
+  location     String?
+
+  startsAt     DateTime @map("starts_at")
+  endsAt       DateTime? @map("ends_at")
+  color        String?  @default("#2563EB")
+  isRecurring  Boolean  @default(false) @map("is_recurring")
+
+  capacity     Int?
+  waitlistEnabled Boolean @default(true) @map("waitlist_enabled")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  club          Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  registrations EventRegistration[]
+  overlapCache  EventOverlapCache?
+
+  @@index([clubId, startsAt(sort: Asc)])
+  @@map("events")
+}
+
+model EventOverlapCache {
+  id                     String   @id @default(uuid())
+  eventId                String   @unique @map("event_id")
+  fullOverlapPercentage  Float    @map("full_overlap_percentage")
+  partialOverlapPercentage Float  @map("partial_overlap_percentage")
+  noOverlapPercentage    Float    @map("no_overlap_percentage")
+  totalMembers           Int      @map("total_members")
+  calculatedAt           DateTime @default(now()) @map("calculated_at")
+  expiresAt              DateTime @map("expires_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("event_overlap_cache")
+}
+
+model EventRegistration {
+  id        String @id @default(uuid())
+  eventId   String @map("event_id")
+  userId    String @map("user_id")
+
+  status    EventRegistrationStatus @default(WAITLIST)
+  checkedInAt DateTime? @map("checked_in_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([eventId, status])
+  @@map("event_registrations")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  authorId  String   @map("author_id")
+  parentId  String?  @map("parent_id")  // NULL = top-level comment
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id])
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  images    CommentImage[]
+  likes     CommentLike[]
+  
+  @@index([postId, createdAt(sort: Desc)])
+  @@index([parentId, createdAt(sort: Asc)])
+  @@map("comments")
+}
+
+model CommentImage {
+  id        String   @id @default(uuid())
+  commentId String   @map("comment_id")
+  imageUrl  String   @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@index([commentId])
+  @@map("comment_images")
+}
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  commentId String   @map("comment_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, commentId])
+  @@index([commentId])
+  @@map("comment_likes")
 }
