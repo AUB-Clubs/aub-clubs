@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { baseProcedure, createTRPCRouter } from '@/trpc/init';
+import { createTRPCRouter } from '@/trpc/init';
 import { prisma } from '@/lib/prisma';
+import { protectedProcedure } from '@/modules/auth/server/middleware';
 
 
 function calculatedCommitmentLevel(post: { createdAt: Date } | null): "HIGH" | "MEDIUM" | "LOW" {
@@ -26,7 +27,7 @@ const CommitmentLevelSchema = z.object({
 });
 
 export const commitmentLevelRouter = createTRPCRouter({
-  getCommitmentLevel: baseProcedure
+  getCommitmentLevel: protectedProcedure
     .input(GetCommitmentLevelInput)
     .output(CommitmentLevelSchema)
     .query(async function ({ input }) {

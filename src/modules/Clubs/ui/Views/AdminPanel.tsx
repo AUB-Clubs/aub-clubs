@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/trpc/client'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -33,6 +33,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ExpandableImage } from '@/components/ui/expandable-image'
+import { CommentThread } from '@/modules/posts/ui/components'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,7 +59,14 @@ import {
   ArrowLeft,
   Calendar,
   BarChart,
+  Settings2,
+  ImageIcon,
+  Upload,
+  Loader2,
+  Save,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from '@/lib/client-image-upload'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -83,6 +92,12 @@ const AUDIENCE_LABELS: Record<string, string> = {
   BOARD_ONLY: 'Board Only',
 }
 
+const ANNOUNCEMENT_PRIORITY_LABELS: Record<string, string> = {
+  GENERAL: 'Normal',
+  IMPORTANT: 'Important',
+  URGENT: 'Urgent',
+}
+
 function getInitials(firstName?: string | null, lastName?: string | null) {
   return [firstName?.[0], lastName?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 }
@@ -102,10 +117,11 @@ import { AnalyticsSection } from '../components/AdminAnalyticsSection'
 
 export interface AdminPanelProps {
   clubId: string
+  initialSection?: 'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null
 }
 
-export default function AdminPanel({ clubId }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | null>(null)
+export default function AdminPanel({ clubId, initialSection = null }: AdminPanelProps) {
+  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null>(initialSection)
 
   // Auth check: only president / vice can access
   const membershipQuery = trpc.clubs.getMembership.useQuery(
@@ -113,27 +129,23 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
     { enabled: !!clubId }
   )
 
-  const role = membershipQuery.data?.role
-  const status = membershipQuery.data?.status
-  const isAdmin = status === 'ACCEPTED' && (role === 'PRESIDENT' || role === 'VICE_PRESIDENT')
+  const actorRole = membershipQuery.data?.role ?? null
+  const isAdmin = actorRole === 'PRESIDENT' || actorRole === 'VICE_PRESIDENT'
 
-  // Loading state
+  // Not admin → redirect
   if (membershipQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/40">
-        <div className="mx-auto max-w-4xl p-6 space-y-6">
-          <Skeleton className="h-10 w-64" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32 rounded-2xl" />
-            ))}
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/40 flex items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <Skeleton className="h-6 w-48 mb-2" />
+            <Skeleton className="h-4 w-full" />
+          </CardHeader>
+        </Card>
       </div>
     )
   }
 
-  // Not admin → redirect
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/40 flex items-center justify-center p-6">
@@ -153,6 +165,377 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
       </div>
     )
   }
+
+function ClubProfileSection({ clubId }: { clubId: string }) {
+  const { data } = trpc.clubs.getOverview.useQuery({ clubId })
+  const club = data?.club
+  const utils = trpc.useUtils()
+  
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null)
+  const [description, setDescription] = useState('')
+  const [mission, setMission] = useState('')
+  const [instagramUrl, setInstagramUrl] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
+
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
+
+  // Initialize form with club data
+  useEffect(() => {
+    if (club) {
+      setDescription(club.description || '')
+      setMission(club.mission || '')
+      setInstagramUrl(club.instagramUrl || '')
+      setWebsiteUrl(club.websiteUrl || '')
+      setAvatarPreview(club.imageUrl || null)
+      setBannerPreview(club.bannerUrl || null)
+    }
+  }, [club])
+
+  const uploadAvatarMutation = trpc.clubs.uploadClubImage.useMutation()
+  const uploadBannerMutation = trpc.clubs.uploadClubBanner.useMutation()
+  const updateProfileMutation = trpc.clubs.updateClubProfile.useMutation({
+    onSuccess: () => {
+      utils.clubs.getOverview.invalidate({ clubId })
+      toast.success('Club profile updated successfully!')
+    },
+    onError: (error) => {
+      toast.error('Failed to update profile', {
+        description: error.message,
+      })
+    },
+  })
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please upload a JPG, PNG, or WebP image',
+      })
+      return
+    }
+
+    // Validate file size (5MB)
+    if (file.size > MAX_UPLOAD_FILE_BYTES) {
+      toast.error('File too large', {
+        description: 'Please upload an image smaller than 5MB',
+      })
+      return
+    }
+
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please upload a JPG, PNG, or WebP image',
+      })
+      return
+    }
+
+    // Validate file size (5MB)
+    if (file.size > MAX_UPLOAD_FILE_BYTES) {
+      toast.error('File too large', {
+        description: 'Please upload an image smaller than 5MB',
+      })
+      return
+    }
+
+    setBannerFile(file)
+    setBannerPreview(URL.createObjectURL(file))
+  }
+
+  const handleSave = async () => {
+    try {
+      // Upload avatar if changed
+      if (avatarFile) {
+        const preparedAvatar = await prepareImageDataUrlForUpload(avatarFile)
+        await uploadAvatarMutation.mutateAsync({
+          clubId,
+          base64Image: preparedAvatar.dataUrl,
+          fileName: avatarFile.name,
+        })
+      }
+
+      // Upload banner if changed
+      if (bannerFile) {
+        const preparedBanner = await prepareImageDataUrlForUpload(bannerFile)
+        await uploadBannerMutation.mutateAsync({
+          clubId,
+          base64Image: preparedBanner.dataUrl,
+          fileName: bannerFile.name,
+        })
+      }
+
+      // Update profile with text fields (images are updated directly by the upload mutations)
+      await updateProfileMutation.mutateAsync({
+        clubId,
+        description: description || undefined,
+        mission: mission || undefined,
+        instagramUrl: instagramUrl || null,
+        websiteUrl: websiteUrl || null,
+      })
+
+      // Reset file states
+      setAvatarFile(null)
+      setBannerFile(null)
+    } catch (error) {
+      // Error handling is done in mutation callbacks
+      console.error('Profile update error:', error)
+    }
+  }
+
+  const isLoading = uploadAvatarMutation.isPending || uploadBannerMutation.isPending || updateProfileMutation.isPending
+  const hasChanges = avatarFile || bannerFile || 
+    description !== (club?.description || '') ||
+    mission !== (club?.mission || '') ||
+    instagramUrl !== (club?.instagramUrl || '') ||
+    websiteUrl !== (club?.websiteUrl || '')
+
+  if (!club) {
+    return <div className="text-muted-foreground">Loading club data...</div>
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold">Club Profile</h2>
+          <p className="text-muted-foreground">
+            Update your club&apos;s avatar, banner, and information
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {/* Avatar Upload */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Club Avatar</CardTitle>
+            <CardDescription>
+              Upload a square image (recommended: 400x400px)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-6">
+              <div className="relative size-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Avatar preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="size-8 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={isLoading}
+                >
+                  <Upload className="size-4 mr-2" />
+                  Choose Image
+                </Button>
+                {avatarPreview && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setAvatarFile(null)
+                      setAvatarPreview(club.imageUrl || null)
+                    }}
+                    disabled={isLoading}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Banner Upload */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Club Banner</CardTitle>
+            <CardDescription>
+              Upload a wide image (recommended: 1200x300px)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <div className="relative w-full h-32 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                {bannerPreview ? (
+                  <img
+                    src={bannerPreview}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="size-8 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={isLoading}
+                >
+                  <Upload className="size-4 mr-2" />
+                  Choose Image
+                </Button>
+                {bannerPreview && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setBannerFile(null)
+                      setBannerPreview(club.bannerUrl || null)
+                    }}
+                    disabled={isLoading}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleBannerChange}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Description */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Description</CardTitle>
+            <CardDescription>
+              Brief overview of your club (max 500 characters)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value.slice(0, 500))}
+              placeholder="Enter club description..."
+              rows={4}
+              disabled={isLoading}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              {description.length}/500 characters
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Mission */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Mission Statement</CardTitle>
+            <CardDescription>
+              Your club&apos;s mission and goals (max 500 characters)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={mission}
+              onChange={(e) => setMission(e.target.value.slice(0, 500))}
+              placeholder="Enter mission statement..."
+              rows={4}
+              disabled={isLoading}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              {mission.length}/500 characters
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Social Links */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Social Links</CardTitle>
+            <CardDescription>
+              Add your club&apos;s social media and website
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="instagram">Instagram URL</Label>
+              <Input
+                id="instagram"
+                type="url"
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                placeholder="https://instagram.com/yourclub"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="website">Website URL</Label>
+              <Input
+                id="website"
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://yourclub.com"
+                disabled={isLoading}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isLoading || !hasChanges}
+            size="lg"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="size-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="size-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </>
+  )
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/40">
@@ -182,7 +565,9 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
                         ? 'Events'
                         : activeSection === 'analytics'
                           ? 'Analytics'
-                          : 'Admin Panel'}
+                          : activeSection === 'profile'
+                            ? 'Club Profile'
+                            : 'Admin Panel'}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {activeSection
@@ -191,9 +576,14 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
               </p>
             </div>
           </div>
-          <Button variant="default" size="sm" className="w-fit rounded-lg" asChild>
-            <Link href={`/clubs/${clubId}`}>Back to club</Link>
-          </Button>
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+            <Button variant="outline" size="sm" className="w-fit rounded-lg" asChild>
+              <Link href={`/clubs/${clubId}/admin/calendar`}>Calendar workspace</Link>
+            </Button>
+            <Button variant="default" size="sm" className="w-fit rounded-lg" asChild>
+              <Link href={`/clubs/${clubId}`}>Back to club</Link>
+            </Button>
+          </div>
         </div>
 
         {/* Section Cards (home) */}
@@ -293,12 +683,31 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
                 </CardContent>
               </Card>
             </button>
+
+            <button
+              onClick={() => setActiveSection('profile')}
+              className="group text-left"
+            >
+              <Card className="h-full rounded-2xl border-0 bg-card/80 shadow-sm ring-1 ring-border/50 transition-all hover:shadow-md hover:ring-violet-500/30 cursor-pointer">
+                <CardContent className="flex flex-col items-start gap-3 pt-6">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-violet-500/10 transition-colors group-hover:bg-violet-500/20">
+                    <Settings2 className="size-6 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Club Profile</p>
+                    <p className="text-sm text-muted-foreground">
+                      Edit club info, images, and links
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
           </div>
         )}
 
         {/* Section content */}
         {activeSection === 'members' && (
-          <MembersSection clubId={clubId} actorRole={role!} />
+          <MembersSection clubId={clubId} actorRole={actorRole!} />
         )}
         {activeSection === 'requests' && (
           <RequestsSection clubId={clubId} />
@@ -311,6 +720,9 @@ export default function AdminPanel({ clubId }: AdminPanelProps) {
         )}
         {activeSection === 'analytics' && (
           <AnalyticsSection clubId={clubId} />
+        )}
+        {activeSection === 'profile' && (
+          <ClubProfileSection clubId={clubId} />
         )}
       </div>
     </div>
@@ -655,12 +1067,21 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     title: '',
     content: '',
     audience: 'PUBLIC' as 'PUBLIC' | 'MEMBERS_ONLY' | 'BOARD_ONLY',
+    priority: 'GENERAL' as 'GENERAL' | 'IMPORTANT' | 'URGENT',
   })
+  const [announcementImages, setAnnouncementImages] = useState<
+    { key: string; fileName: string; preview: string; url?: string }[]
+  >([])
+  const [uploadingCount, setUploadingCount] = useState(0)
+  const announcementImageInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadAnnouncementImageMutation = trpc.clubs.uploadPostImage.useMutation()
 
   const announcementsQuery = trpc.clubs.memberManagement.getAdminAnnouncements.useQuery(
     { clubId },
     { enabled: !!clubId }
   )
+  const currentUserQuery = trpc.profile.get.useQuery(undefined, { staleTime: 5 * 60 * 1000 })
 
   const utils = trpc.useUtils()
 
@@ -668,7 +1089,8 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     onSuccess: () => {
       utils.clubs.memberManagement.getAdminAnnouncements.invalidate({ clubId })
       setCreateOpen(false)
-      setForm({ title: '', content: '', audience: 'PUBLIC' })
+      setForm({ title: '', content: '', audience: 'PUBLIC', priority: 'GENERAL' })
+      setAnnouncementImages([])
     },
   })
 
@@ -679,14 +1101,77 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
     },
   })
 
+  const handleAnnouncementImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    if (announcementImages.length + files.length > 4) {
+      toast.error('You can only upload up to 4 images per announcement')
+      if (announcementImageInputRef.current) {
+        announcementImageInputRef.current.value = ''
+      }
+      return
+    }
+
+    for (const file of files) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        toast.error(`${file.name}: Only JPG, PNG, and WebP images are allowed`)
+        continue
+      }
+
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
+        toast.error(`${file.name}: Image must be smaller than 5MB`)
+        continue
+      }
+
+      const key = `${file.name}-${file.lastModified}`
+
+      try {
+        const preparedImage = await prepareImageDataUrlForUpload(file)
+        setAnnouncementImages((prev) => [...prev, { key, fileName: file.name, preview: preparedImage.dataUrl }])
+
+        setUploadingCount((count) => count + 1)
+        const result = await uploadAnnouncementImageMutation.mutateAsync({
+          base64Image: preparedImage.dataUrl,
+          fileName: file.name,
+        })
+
+        setAnnouncementImages((prev) =>
+          prev.map((img) =>
+            img.key === key ? { ...img, url: result.imageUrl } : img
+          )
+        )
+      } catch {
+        setAnnouncementImages((prev) => prev.filter((img) => img.key !== key))
+      } finally {
+        setUploadingCount((count) => Math.max(0, count - 1))
+      }
+    }
+
+    if (announcementImageInputRef.current) {
+      announcementImageInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveAnnouncementImage = (key: string) => {
+    setAnnouncementImages((prev) => prev.filter((img) => img.key !== key))
+  }
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim() || !form.content.trim()) return
+    if (announcementImages.some((img) => !img.url)) {
+      toast.error('Please wait for images to finish uploading')
+      return
+    }
+
     createMutation.mutate({
       clubId,
       title: form.title.trim(),
       content: form.content.trim(),
       audience: form.audience,
+      priority: form.priority,
+      imageUrls: announcementImages.map((img) => img.url!).filter(Boolean),
     })
   }
 
@@ -705,12 +1190,22 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
   }
 
   const announcements = announcementsQuery.data ?? []
+  const currentUserId = currentUserQuery.data?.id
 
   return (
     <>
       {/* Create button */}
       <div className="flex justify-end">
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open)
+            if (!open) {
+              setForm({ title: '', content: '', audience: 'PUBLIC', priority: 'GENERAL' })
+              setAnnouncementImages([])
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="gap-1.5 rounded-lg">
               <Plus className="size-4" />
@@ -769,6 +1264,77 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={form.priority}
+                  onValueChange={(val) =>
+                    setForm((f) => ({
+                      ...f,
+                      priority: val as 'GENERAL' | 'IMPORTANT' | 'URGENT',
+                    }))
+                  }
+                >
+                  <SelectTrigger className="rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GENERAL">Normal</SelectItem>
+                    <SelectItem value="IMPORTANT">Important</SelectItem>
+                    <SelectItem value="URGENT">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Images (optional)</Label>
+                  <span className="text-xs text-muted-foreground">
+                    {announcementImages.length}/4
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {announcementImages.map((img) => (
+                    <div key={img.key} className="relative">
+                      <img
+                        src={img.preview}
+                        alt={img.fileName}
+                        className="h-20 w-20 rounded-md object-cover"
+                      />
+                      <button
+                        type="button"
+                        className="absolute -right-1 -top-1 rounded-full bg-background p-1 shadow"
+                        onClick={() => handleRemoveAnnouncementImage(img.key)}
+                        disabled={createMutation.isPending}
+                        aria-label="Remove image"
+                      >
+                        <X className="size-3" />
+                      </button>
+                      {!img.url && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/50">
+                          <Loader2 className="size-4 animate-spin text-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {announcementImages.length < 4 && (
+                    <button
+                      type="button"
+                      className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed text-muted-foreground hover:bg-muted/50"
+                      onClick={() => announcementImageInputRef.current?.click()}
+                    >
+                      <Upload className="size-4" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={announcementImageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleAnnouncementImageSelect}
+                />
+              </div>
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   type="button"
@@ -781,6 +1347,7 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                   type="submit"
                   disabled={
                     createMutation.isPending ||
+                    uploadingCount > 0 ||
                     !form.title.trim() ||
                     !form.content.trim()
                   }
@@ -826,6 +1393,18 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                     <Badge variant="outline" className="text-xs">
                       {AUDIENCE_LABELS[a.audience] ?? a.audience}
                     </Badge>
+                    <Badge
+                      variant={
+                        a.priority === 'URGENT'
+                          ? 'destructive'
+                          : a.priority === 'IMPORTANT'
+                          ? 'default'
+                          : 'secondary'
+                      }
+                      className="text-xs"
+                    >
+                      {ANNOUNCEMENT_PRIORITY_LABELS[a.priority] ?? a.priority}
+                    </Badge>
                   </div>
                   {a.status === 'DRAFT' && (
                     <div className="flex gap-2">
@@ -869,10 +1448,27 @@ function AnnouncementsSection({ clubId }: { clubId: string }) {
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
                   {a.content}
                 </p>
+                {a.imageUrls && a.imageUrls.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {a.imageUrls.map((url: string, i: number) => (
+                      <ExpandableImage
+                        key={`${a.id}-${i}`}
+                        src={url}
+                        alt={`${a.title} image ${i + 1}`}
+                        className="h-20 w-20 rounded-md"
+                      />
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground pt-1">
                   By {a.author} · {formatDate(a.createdAt)}
                 </p>
               </CardContent>
+              {currentUserId && (
+                <div className="border-t px-6 pb-4">
+                  <CommentThread postId={a.id} currentUserId={currentUserId} />
+                </div>
+              )}
             </Card>
           ))}
         </div>

@@ -16,13 +16,16 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Mail, UserCircle2, Users, Pencil, Save, X } from 'lucide-react'
+import { Mail, UserCircle2, Users, Pencil, Save, X, Calendar, GraduationCap, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { EditProfilePicture } from './components/edit-profile-picture'
+import { toast } from 'sonner'
 
 type ProfileFormState = {
+  aubnetId: string
   bio: string
   avatar_url: string
   major: string
@@ -51,6 +54,7 @@ export default function StudentPage() {
   const updateMutation = trpc.profile.update.useMutation()
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<ProfileFormState>({
+    aubnetId: '',
     bio: '',
     avatar_url: '',
     major: '',
@@ -61,6 +65,7 @@ export default function StudentPage() {
   useEffect(() => {
     if (profile) {
       setForm({
+        aubnetId: profile.aubnetId ? String(profile.aubnetId) : '',
         bio: profile.bio ?? '',
         avatar_url: profile.avatarUrl ?? '',
         major: profile.major ?? '',
@@ -68,7 +73,7 @@ export default function StudentPage() {
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.bio, profile?.avatarUrl, profile?.major, profile?.year])
+  }, [profile?.aubnetId, profile?.bio, profile?.avatarUrl, profile?.major, profile?.year])
 
   const isSaving = updateMutation.isPending
 
@@ -83,16 +88,22 @@ export default function StudentPage() {
     e.preventDefault()
     if (!profile) return
   
-    await updateMutation.mutateAsync({
-      bio: form.bio || undefined,
-      avatar_url: form.avatar_url || null, // Will be ignored by backend if we remove this field, but for now we keep state
-      major: form.major || null,
-      year: form.year ? Number(form.year) : null,
-    })
+    try {
+      await updateMutation.mutateAsync({
+        aubnetId: form.aubnetId ? Number(form.aubnetId) : undefined,
+        bio: form.bio || undefined,
+        avatar_url: form.avatar_url || null, // Will be ignored by backend if we remove this field, but for now we keep state
+        major: form.major || null,
+        year: form.year ? Number(form.year) : null,
+      })
 
-    // Refetch to keep UI in sync
-    await profileQuery.refetch()
-    setIsEditing(false)
+      // Refetch to keep UI in sync
+      await profileQuery.refetch()
+      setIsEditing(false)
+      toast.success('Profile updated successfully!')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update profile')
+    }
   }
 
   const isLoading = profileQuery.isLoading
@@ -104,14 +115,33 @@ export default function StudentPage() {
         <Card className="overflow-hidden border-none bg-linear-to-r from-primary via-primary/90 to-secondary text-primary-foreground shadow-xl">
           <CardHeader className="flex flex-col gap-6 pb-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-5">
-              <Avatar className="h-20 w-20 border-2 border-primary-foreground/40 shadow-lg">
-                  {/* {profile?.avatar_url ? (
-                    <AvatarImage src={profile.avatar_url} alt={`${profile.firstName} ${profile.lastName}`} />
-                  ) : null} */}
-                <AvatarFallback className="bg-primary-foreground/10 text-primary-foreground text-xl font-semibold">
-                  {getInitials(profile?.firstName, profile?.lastName)}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                {profileQuery.isLoading ? (
+                  <Skeleton className="h-20 w-20 rounded-full border-2 border-primary-foreground/40" />
+                ) : (
+                  <>
+                    <Avatar className="h-20 w-20 border-2 border-primary-foreground/40 shadow-lg">
+                      {profile?.avatarUrl ? (
+                        <AvatarImage src={profile.avatarUrl} alt={`${profile.firstName} ${profile.lastName}`} />
+                      ) : null}
+                      <AvatarFallback className="bg-primary-foreground/10 text-primary-foreground text-xl font-semibold">
+                        {getInitials(profile?.firstName, profile?.lastName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {profile && !isEditing && (
+                      <div className="absolute -bottom-1 -right-1">
+                        <EditProfilePicture 
+                          userId={profile.id}
+                          currentImageUrl={profile.avatarUrl}
+                          firstName={profile.firstName}
+                          lastName={profile.lastName}
+                          variant="icon"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
               <div className="space-y-2">
                 {profileQuery.isLoading ? (
                   <>
@@ -205,13 +235,28 @@ export default function StudentPage() {
                     <Label htmlFor="bio">About you</Label>
                     <Textarea
                       id="bio"
-                      placeholder="Tell clubs a little about yourself, your interests, and what you’re looking for..."
+                      placeholder="Tell clubs a little about yourself, your interests, and what you're looking for..."
                       value={form.bio}
                       onChange={(e) => handleChange('bio', e.target.value)}
                       rows={4}
                     />
                     <p className="text-xs text-muted-foreground">
                       This appears on your profile for club leaders and members.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="aubnetId">AUBnet ID</Label>
+                    <Input
+                      id="aubnetId"
+                      type="number"
+                      placeholder="e.g. 202012345"
+                      value={form.aubnetId}
+                      onChange={(e) => handleChange('aubnetId', e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Your unique AUB identification number.
                     </p>
                   </div>
 
@@ -379,14 +424,49 @@ export default function StudentPage() {
                   ) : profile ? (
                     <div className="space-y-3 text-sm">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground">Email</span>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="size-4" />
+                          Email
+                        </span>
                         <span className="font-medium">{profile.email}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground">AUBnet ID</span>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <UserCircle2 className="size-4" />
+                          AUBnet ID
+                        </span>
                         <span className="font-medium">{profile.aubnetId}</span>
                       </div>
-                      <div className="flex items-center justify-between gap-2">
+                      {profile.dob && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <Calendar className="size-4" />
+                            Date of Birth
+                          </span>
+                          <span className="font-medium">
+                            {formatDate(profile.dob)}
+                          </span>
+                        </div>
+                      )}
+                      {profile.major && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <GraduationCap className="size-4" />
+                            Major
+                          </span>
+                          <span className="font-medium">{profile.major}</span>
+                        </div>
+                      )}
+                      {profile.year && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <BookOpen className="size-4" />
+                            Year
+                          </span>
+                          <span className="font-medium">Year {profile.year}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t">
                         <span className="text-muted-foreground">Joined</span>
                         <span className="font-medium">
                           {formatDate(profile.createdAt)}

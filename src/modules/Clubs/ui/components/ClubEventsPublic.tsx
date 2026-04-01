@@ -46,10 +46,9 @@ function getBadgeConfig(e: ClubEvent): { label: string; className: string } {
 function getRsvpButton(e: ClubEvent): { text: string; disabled: boolean; intent: 'default' | 'secondary' | 'outline' } {
   if (e.viewerStatus === 'CHECKED_IN') return { text: 'Checked in', disabled: true, intent: 'secondary' }
   if (e.viewerStatus === 'REGISTERED') return { text: 'Registered', disabled: true, intent: 'secondary' }
-  if (e.viewerStatus === 'WAITLIST') return { text: 'Waitlisted', disabled: true, intent: 'secondary' }
+  if (e.viewerStatus === 'WAITLIST') return { text: 'Registered', disabled: true, intent: 'secondary' }
 
   if (e.timeState === 'SOLD_OUT') {
-    if (e.waitlistEnabled) return { text: 'Join waitlist', disabled: false, intent: 'outline' }
     return { text: 'Sold out', disabled: true, intent: 'secondary' }
   }
 
@@ -87,7 +86,7 @@ export default function ClubEventsPublic({ clubId }: { clubId: string }) {
                 <CalendarDays className="size-4" />
                 Upcoming events
               </CardTitle>
-              <p className="text-sm text-muted-foreground">RSVP, track seats, and join the waitlist when needed.</p>
+              <p className="text-sm text-muted-foreground">RSVP and track seats.</p>
             </div>
           </div>
         </CardHeader>
@@ -129,11 +128,6 @@ export default function ClubEventsPublic({ clubId }: { clubId: string }) {
                             {e.capacity !== null && (
                               <Badge variant="outline" className="text-xs">
                                 {e.registeredCount}/{e.capacity} seats
-                              </Badge>
-                            )}
-                            {e.waitlistEnabled && e.waitlistCount > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {e.waitlistCount} waitlist
                               </Badge>
                             )}
                           </div>
@@ -237,4 +231,3 @@ export default function ClubEventsPublic({ clubId }: { clubId: string }) {
     </div>
   )
 }
-
