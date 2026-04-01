@@ -1,0 +1,21 @@
+-- Convert TIMESTAMP columns to TIMESTAMPTZ for proper timezone handling
+
+-- AIIDEMessage table
+ALTER TABLE "AIIDEMessage" 
+  ALTER COLUMN "createdAt" TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC',
+  ALTER COLUMN "updatedAt" TYPE TIMESTAMPTZ(3) USING "updatedAt" AT TIME ZONE 'UTC';
+
+-- AIIDEFile table
+ALTER TABLE "AIIDEFile" 
+  ALTER COLUMN "createdAt" TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC',
+  ALTER COLUMN "updatedAt" TYPE TIMESTAMPTZ(3) USING "updatedAt" AT TIME ZONE 'UTC';
+
+-- AIIDEProject table
+ALTER TABLE "AIIDEProject" 
+  ALTER COLUMN "createdAt" TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC',
+  ALTER COLUMN "updatedAt" TYPE TIMESTAMPTZ(3) USING "updatedAt" AT TIME ZONE 'UTC';
+
+-- AIIDEAIScript table
+ALTER TABLE "AIIDEAIScript" 
+  ALTER COLUMN "createdAt" TYPE TIMESTAMPTZ(3) USING "createdAt" AT TIME ZONE 'UTC',
+  ALTER COLUMN "updatedAt" TYPE TIMESTAMPTZ(3) USING "updatedAt" AT TIME ZONE 'UTC';

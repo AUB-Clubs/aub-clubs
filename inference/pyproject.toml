@@ -1,0 +1,30 @@
+[project]
+name = "aub-clubs-inference"
+version = "1.0.0"
+description = "ML inference service for content moderation"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "pydantic>=2.10.0",
+    "transformers>=4.47.0",
+    "pillow>=11.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "timm>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "httpx>=0.28.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }

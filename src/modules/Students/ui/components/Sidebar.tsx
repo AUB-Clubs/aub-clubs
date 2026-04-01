@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/trpc/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -23,18 +23,41 @@ import {
   Settings,
   Users,
   ClipboardList,
+  Compass,
+  Calendar,
+  LogOut,
 } from 'lucide-react';
+import { createClient } from '@/modules/auth/lib/supabase-client';
+import { toast } from 'sonner';
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const utils = trpc.useUtils();
   const { data: user, isLoading } = trpc.profile.get.useQuery(undefined, {
     retry: false,
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false
   });
 
+  async function handleSignOut() {
+    try {
+      const supabase = createClient();
+      // Redirect immediately for better UX, then clean up
+      router.push("/");
+      toast.success("Signed out successfully");
+      // Sign out and invalidate in background
+      supabase.auth.signOut();
+      utils.invalidate();
+    } catch {
+      toast.error("Failed to sign out");
+    }
+  }
+
   const items = [
-    { title: "For You", url: "/me", icon: Home },
+    { title: "Discover", url: "/discover", icon: Compass },
+    { title: "My Clubs", url: "/me", icon: Home },
+    { title: "Calendar", url: "/calendar", icon: Calendar },
     { title: "Clubs", url: "/clubs", icon: Users },
   ];
 
@@ -135,6 +158,12 @@ export function AppSidebar() {
                 <Settings />
                 <span>Settings & Profile</span>
               </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleSignOut} className="text-destructive hover:text-destructive">
+              <LogOut />
+              <span>Sign Out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

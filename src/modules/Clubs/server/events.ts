@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { createTRPCRouter, baseProcedure } from "@/trpc/init";
+import { createTRPCRouter } from "@/trpc/init";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
+import { protectedProcedure } from "@/modules/auth/server/middleware";
+import type { UserModel as User } from "@/generated/prisma/models";
 
-async function requireClubAdmin(ctx: { userId: string }, clubId: string) {
+async function requireClubAdmin(user: User, clubId: string) {
   const m = await prisma.membership.findUnique({
-    where: { userId_clubId: { userId: ctx.userId, clubId } },
+    where: { userId_clubId: { userId: user.id, clubId } },
     select: { role: true, status: true },
   });
 
@@ -19,9 +21,9 @@ async function requireClubAdmin(ctx: { userId: string }, clubId: string) {
   return m;
 }
 
-async function requireAcceptedMember(ctx: { userId: string }, clubId: string) {
+async function requireAcceptedMember(user: User, clubId: string) {
   const m = await prisma.membership.findUnique({
-    where: { userId_clubId: { userId: ctx.userId, clubId } },
+    where: { userId_clubId: { userId: user.id, clubId } },
     select: { status: true },
   });
 
@@ -38,6 +40,8 @@ const EventInput = z.object({
   location: z.string().min(1).max(500).optional().nullable(),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date().optional().nullable(),
+  color: z.string().regex(/^#([A-Fa-f0-9]{6})$/).optional().nullable(),
+  isRecurring: z.boolean().optional().default(false),
   capacity: z.number().int().min(0).optional().nullable(),
   waitlistEnabled: z.boolean().optional().default(true),
 });
@@ -49,6 +53,7 @@ const EventItemSchema = z.object({
   location: z.string().nullable(),
   startsAt: z.string(),
   endsAt: z.string().nullable(),
+  color: z.string().nullable(),
   capacity: z.number().int().nullable(),
   waitlistEnabled: z.boolean(),
 
@@ -62,7 +67,7 @@ const EventItemSchema = z.object({
 
 export const eventsRouter = createTRPCRouter({
   // Public-facing event lists for a club
-  getClubEvents: baseProcedure
+  getClubEvents: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
@@ -73,6 +78,7 @@ export const eventsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const now = new Date();
       const { clubId, upcomingLimit, pastLimit } = input;
+      const userId = ctx.user.id;
 
       const [upcoming, past] = await Promise.all([
         prisma.event.findMany({
@@ -86,6 +92,7 @@ export const eventsRouter = createTRPCRouter({
             location: true,
             startsAt: true,
             endsAt: true,
+            color: true,
             capacity: true,
             waitlistEnabled: true,
           },
@@ -101,6 +108,7 @@ export const eventsRouter = createTRPCRouter({
             location: true,
             startsAt: true,
             endsAt: true,
+            color: true,
             capacity: true,
             waitlistEnabled: true,
           },
@@ -112,7 +120,7 @@ export const eventsRouter = createTRPCRouter({
           events.map(async (e) => {
             const [viewerReg, registeredCount, checkedInCount, waitlistCount] = await Promise.all([
               prisma.eventRegistration.findUnique({
-                where: { userId_eventId: { userId: ctx.userId, eventId: e.id } },
+                where: { userId_eventId: { userId, eventId: e.id } },
                 select: { status: true },
               }),
               prisma.eventRegistration.count({
@@ -145,6 +153,7 @@ export const eventsRouter = createTRPCRouter({
               startsAt: e.startsAt.toISOString(),
               endsAt: e.endsAt?.toISOString() ?? null,
               capacity: capacity,
+              color: e.color ?? "#2563EB",
               waitlistEnabled: e.waitlistEnabled,
               registeredCount,
               checkedInCount,
@@ -166,15 +175,16 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // User RSVP to an event (register or waitlist)
-  rsvpToEvent: baseProcedure
+  rsvpToEvent: protectedProcedure
     .input(
       z.object({
         eventId: z.string(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.id;
       const existing = await prisma.eventRegistration.findUnique({
-        where: { userId_eventId: { userId: ctx.userId, eventId: input.eventId } },
+        where: { userId_eventId: { userId, eventId: input.eventId } },
         select: { status: true },
       });
       if (existing) return { status: existing.status as "REGISTERED" | "WAITLIST" | "CHECKED_IN" };
@@ -188,7 +198,7 @@ export const eventsRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       }
 
-      await requireAcceptedMember(ctx, event.clubId);
+      await requireAcceptedMember(ctx.user, event.clubId);
 
       const registeredCount = await prisma.eventRegistration.count({
         where: { eventId: event.id, status: { in: ["REGISTERED", "CHECKED_IN"] } },
@@ -210,7 +220,7 @@ export const eventsRouter = createTRPCRouter({
       await prisma.eventRegistration.create({
         data: {
           eventId: event.id,
-          userId: ctx.userId,
+          userId,
           status,
         },
       });
@@ -218,8 +228,37 @@ export const eventsRouter = createTRPCRouter({
       return { status };
     }),
 
+  cancelRsvp: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const registration = await prisma.eventRegistration.findUnique({
+        where: { userId_eventId: { userId: ctx.user.id, eventId: input.eventId } },
+        include: {
+          event: {
+            select: { clubId: true },
+          },
+        },
+      });
+
+      if (!registration) {
+        return { ok: true };
+      }
+
+      await requireAcceptedMember(ctx.user, registration.event.clubId);
+
+      await prisma.eventRegistration.delete({
+        where: { userId_eventId: { userId: ctx.user.id, eventId: input.eventId } },
+      });
+
+      return { ok: true };
+    }),
+
   // Admin-only event check-in
-  checkIn: baseProcedure
+  checkIn: protectedProcedure
     .input(
       z.object({
         eventId: z.string(),
@@ -234,7 +273,7 @@ export const eventsRouter = createTRPCRouter({
 
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
 
-      await requireClubAdmin(ctx, event.clubId);
+      await requireClubAdmin(ctx.user, event.clubId);
 
       const reg = await prisma.eventRegistration.findUnique({
         where: { userId_eventId: { userId: input.userId, eventId: input.eventId } },
@@ -255,14 +294,14 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Admin: create event
-  createEvent: baseProcedure
+  createEvent: protectedProcedure
     .input(
       EventInput.extend({
         clubId: z.string(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireClubAdmin(ctx, input.clubId);
+      await requireClubAdmin(ctx.user, input.clubId);
 
       const event = await prisma.event.create({
         data: {
@@ -272,6 +311,8 @@ export const eventsRouter = createTRPCRouter({
           location: input.location ?? null,
           startsAt: input.startsAt,
           endsAt: input.endsAt ?? null,
+          color: input.color ?? null,
+          isRecurring: input.isRecurring,
           capacity: input.capacity ?? null,
           waitlistEnabled: input.waitlistEnabled,
         },
@@ -281,7 +322,7 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Admin: update event
-  updateEvent: baseProcedure
+  updateEvent: protectedProcedure
     .input(
       EventInput.extend({
         eventId: z.string(),
@@ -294,7 +335,7 @@ export const eventsRouter = createTRPCRouter({
       });
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
 
-      await requireClubAdmin(ctx, existing.clubId);
+      await requireClubAdmin(ctx.user, existing.clubId);
 
       const event = await prisma.event.update({
         where: { id: input.eventId },
@@ -304,6 +345,8 @@ export const eventsRouter = createTRPCRouter({
           location: input.location ?? null,
           startsAt: input.startsAt,
           endsAt: input.endsAt ?? null,
+          color: input.color ?? null,
+          isRecurring: input.isRecurring,
           capacity: input.capacity ?? null,
           waitlistEnabled: input.waitlistEnabled,
         },
@@ -313,7 +356,7 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Admin: delete event
-  deleteEvent: baseProcedure
+  deleteEvent: protectedProcedure
     .input(
       z.object({
         eventId: z.string(),
@@ -325,14 +368,14 @@ export const eventsRouter = createTRPCRouter({
         select: { clubId: true },
       });
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
-      await requireClubAdmin(ctx, event.clubId);
+      await requireClubAdmin(ctx.user, event.clubId);
 
       await prisma.event.delete({ where: { id: input.eventId } });
       return { ok: true };
     }),
 
   // Admin: attendance list for a specific event
-  getEventAttendance: baseProcedure
+  getEventAttendance: protectedProcedure
     .input(
       z.object({
         eventId: z.string(),
@@ -345,7 +388,7 @@ export const eventsRouter = createTRPCRouter({
       });
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
 
-      await requireClubAdmin(ctx, event.clubId);
+      await requireClubAdmin(ctx.user, event.clubId);
 
       const regs = await prisma.eventRegistration.findMany({
         where: { eventId: input.eventId },
@@ -378,4 +421,3 @@ export const eventsRouter = createTRPCRouter({
       }));
     }),
 });
-

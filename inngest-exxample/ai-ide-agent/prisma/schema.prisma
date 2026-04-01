@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("AI_IDE_DB_URL")
+}
+
+model AIIDEMessageChunk {
+  id        String       @id @default(uuid())
+  response  String
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+  messageId String
+  message   AIIDEMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model AIIDEMessage {
+  id        String              @id @default(uuid())
+  content   String
+  role      MessageRole
+  type      MessageType
+  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime            @updatedAt @db.Timestamptz(3)
+  projectId String
+  project   AIIDEProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks    AIIDEMessageChunk[]
+
+  @@index([projectId])
+}
+
+model AIIDEFile {
+  id        String       @id @default(uuid())
+  name      String
+  content   String
+  path      String
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+  projectId String
+  project   AIIDEProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model AIIDEAgentStep {
+  id         String        @id @default(uuid())
+  stepName   String
+  stepStatus String
+  stepOutput String?
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+  runId      String
+  run        AIIDEAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+model AIIDEAgentRun {
+  id        String           @id @default(uuid())
+  runStatus String
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+  projectId String
+  project   AIIDEProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  steps     AIIDEAgentStep[]
+
+  @@index([projectId])
+}
+
+model AIIDEProject {
+  id                         String          @id @default(uuid())
+  name                       String
+  scriptName                 String?
+  createdAt                  DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime        @updatedAt @db.Timestamptz(3)
+  projectType                ProjectType     @default(UNSET)
+  isAIProject                Boolean         @default(false)
+  isAwaitingScriptActivation Boolean         @default(false)
+  scriptDescription          String?
+  scripts                    AIIDEAIScript[]
+  agentRuns                  AIIDEAgentRun[]
+  code                       AIIDEFile[]
+  messages                   AIIDEMessage[]
+}
+
+model AIIDEAIScript {
+  id             String       @id @default(uuid())
+  scriptConfigId String
+  created        BigInt
+  createdBy      String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  projectId      String
+  project        AIIDEProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model EmbeddingExample {
+  id               String                 @id
+  projectId        String
+  fileId           String
+  codeChunk        String?
+  vector           Unsupported("vector")?
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  EmbeddingFile    EmbeddingFile          @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  EmbeddingProject EmbeddingProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([projectId])
+}
+
+model EmbeddingFile {
+  id               String             @id
+  projectId        String
+  name             String
+  code             String?
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  EmbeddingExample EmbeddingExample[]
+  EmbeddingProject EmbeddingProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model EmbeddingProject {
+  id               String             @id
+  name             String
+  description      String?
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  EmbeddingExample EmbeddingExample[]
+  EmbeddingFile    EmbeddingFile[]
+}
+
+model GoPluginDoc {
+  id        String                 @id
+  content   String?
+  embedding Unsupported("vector")?
+  createdAt DateTime               @default(now()) @db.Timestamptz(3)
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum MessageType {
+  RESULT
+  ERROR
+}
+
+enum ProjectType {
+  PROVISIONING
+  NORMAL
+  UNSET
+}

@@ -1,11 +1,14 @@
-import { z } from "zod"
-import { createTRPCRouter, baseProcedure } from "@/trpc/init"
-import { prisma } from "@/lib/prisma"
 import { TRPCError } from "@trpc/server"
-import { HfInference } from "@huggingface/inference"
+import { z } from "zod"
+import { prisma } from "@/lib/prisma"
+import { createTRPCRouter } from "@/trpc/init"
+import { moderateImage, moderateText } from "@/modules/moderation/server/moderation"
+import { uploadFileToSupabase } from "@/lib/supabase-storage"
+import { createClient } from "@/modules/auth/server/utils/supabase-server"
 import { memberManagementRouter } from "./member-management"
 import { eventsRouter } from "./events"
 import { analyticsRouter } from "./analytics"
+import { protectedProcedure } from "@/modules/auth/server/middleware"
 
 const ClubTypeEnum = z.enum([
   "ACADEMIC", "ARTS", "BUSINESS", "CAREER", "CULTURAL", "GAMING", "MEDIA",
@@ -14,6 +17,27 @@ const ClubTypeEnum = z.enum([
 ]);
 
 const CommitmentLevelEnum = z.enum(["HIGH", "MEDIUM", "LOW"]);
+const MAX_BASE64_IMAGE_CHARS = 4_100_000;
+
+/**
+ * Helper to convert base64 to Blob
+ */
+function base64ToBlob(base64: string): Blob {
+  const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+  const byteString = atob(base64Data);
+  const arrayBuffer = new ArrayBuffer(byteString.length);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  
+  for (let i = 0; i < byteString.length; i++) {
+    uint8Array[i] = byteString.charCodeAt(i);
+  }
+  
+  // Detect MIME type from base64 prefix
+  const mimeMatch = base64.match(/^data:(image\/\w+);base64,/);
+  const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  
+  return new Blob([uint8Array], { type: mimeType });
+}
 
 function computeCommitmentLevel(latestAnnouncementDate: Date | null): "HIGH" | "MEDIUM" | "LOW" {
   if (!latestAnnouncementDate) return "LOW";
@@ -28,11 +52,11 @@ export const clubsRouter = createTRPCRouter({
   memberManagement: memberManagementRouter,
   events: eventsRouter,
   analytics: analyticsRouter,
-  requestJoin: baseProcedure
+  requestJoin: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { clubId } = input;
-      const userId = ctx.userId;
+      const userId = ctx.user.id;
 
       const existing = await prisma.membership.findUnique({
         where: { userId_clubId: { userId, clubId } },
@@ -43,9 +67,16 @@ export const clubsRouter = createTRPCRouter({
       if (existing?.status === "PENDING") return { ok: true, status: "PENDING" as const };
 
       if (existing?.status === "REJECTED") {
-        await prisma.membership.update({
+        await prisma.membership.delete({
           where: { userId_clubId: { userId, clubId } },
-          data: { status: "PENDING" },
+        });
+        await prisma.membership.create({
+          data: {
+            userId,
+            clubId,
+            role: "MEMBER",
+            status: "PENDING",
+          },
         });
         return { ok: true, status: "PENDING" as const };
       }
@@ -62,7 +93,7 @@ export const clubsRouter = createTRPCRouter({
       return { ok: true, status: "PENDING" as const };
     }),
 
-  getOverview: baseProcedure
+  getOverview: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
@@ -95,7 +126,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  getStats: baseProcedure
+  getStats: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ input }) => {
       const { clubId } = input
@@ -107,13 +138,13 @@ export const clubsRouter = createTRPCRouter({
       return { members: membersCount, postsThisWeek }
     }),
 
-  getMembership: baseProcedure
+  getMembership: protectedProcedure
     .input(z.object({ clubId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { clubId } = input;
 
       const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId } },
+        where: { userId_clubId: { userId: ctx.user.id, clubId } },
         select: { role: true, status: true },
       });
 
@@ -123,7 +154,7 @@ export const clubsRouter = createTRPCRouter({
       };
     }),
 
-  getForumPosts: baseProcedure
+  getForumPosts: protectedProcedure
     .input(z.object({
       clubId: z.string(),
       limit: z.number().min(1).max(50).default(20),
@@ -133,7 +164,7 @@ export const clubsRouter = createTRPCRouter({
       const { clubId, limit, cursor } = input
 
       const posts = await prisma.post.findMany({
-        where: { clubId },
+        where: { clubId, type: "GENERAL", status: "PUBLISHED" },
         orderBy: { createdAt: "desc" },
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
@@ -141,7 +172,7 @@ export const clubsRouter = createTRPCRouter({
           author: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { upvotes: true } },
           postImages: { select: { imageUrl: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+          upvotes: { where: { userId: ctx.user.id }, select: { id: true } },
         },
       })
 
@@ -178,7 +209,7 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  getMembers: baseProcedure
+  getMembers: protectedProcedure
     .input(z.object({ clubId: z.string(), limit: z.number().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
       const { clubId, limit } = input
@@ -187,7 +218,11 @@ export const clubsRouter = createTRPCRouter({
         where: { clubId },
         orderBy: [{ role: "desc" }, { joinedAt: "asc" }],
         take: limit,
-        include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        include: {
+          user: {
+            select: { firstName: true, lastName: true, email: true, avatarUrl: true },
+          },
+        },
       })
 
       return memberships.map((m: typeof memberships[number]) => ({
@@ -198,10 +233,11 @@ export const clubsRouter = createTRPCRouter({
         firstName: m.user.firstName,
         lastName: m.user.lastName,
         email: m.user.email,
+        avatarUrl: m.user.avatarUrl,
       }))
     }),
 
-  getAnnouncements: baseProcedure
+  getAnnouncements: protectedProcedure
     .input(z.object({
       clubId: z.string(),
       limit: z.number().min(1).max(50).default(20),
@@ -214,6 +250,7 @@ export const clubsRouter = createTRPCRouter({
         where: { clubId, type: "ANNOUNCEMENT", status: "PUBLISHED", audience: "PUBLIC" },
         orderBy: [
           { pinnedAt: "desc" },
+          { priority: "desc" },
           { createdAt: "desc" },
         ],
         take: limit + 1,
@@ -222,7 +259,7 @@ export const clubsRouter = createTRPCRouter({
           author: { select: { id: true, firstName: true, lastName: true } },
           postImages: { select: { imageUrl: true } },
           _count: { select: { upvotes: true } },
-          upvotes: { where: { userId: ctx.userId }, select: { id: true } },
+          upvotes: { where: { userId: ctx.user.id }, select: { id: true } },
         },
       })
 
@@ -237,6 +274,7 @@ export const clubsRouter = createTRPCRouter({
           id: p.id,
           title: p.title,
           content: p.content,
+          priority: p.priority,
           createdAt: p.createdAt.toISOString(),
           pinnedAt: p.pinnedAt?.toISOString() ?? null,
           author: `${p.author.firstName} ${p.author.lastName}`,
@@ -251,11 +289,11 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  toggleUpvote: baseProcedure
+  toggleUpvote: protectedProcedure
     .input(z.object({ postId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { postId } = input
-      const userId = ctx.userId
+      const userId = ctx.user.id
 
       const existingUpvote = await prisma.upvote.findUnique({
         where: { userId_postId: { userId, postId } },
@@ -274,18 +312,19 @@ export const clubsRouter = createTRPCRouter({
       }
     }),
 
-  createPost: baseProcedure
+  createPost: protectedProcedure
     .input(
       z.object({
         clubId: z.string(),
         title: z.string().min(1).max(500),
         content: z.string().min(1).max(10000),
         type: z.enum(["GENERAL", "ANNOUNCEMENT"]).default("GENERAL"),
+        imageUrls: z.array(z.string().url()).max(4).optional(), // Max 4 images per post
       })
     )
     .mutation(async ({ ctx, input }) => {
       const membership = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: ctx.userId, clubId: input.clubId } },
+        where: { userId_clubId: { userId: ctx.user.id, clubId: input.clubId } },
         select: { role: true },
       })
       if (!membership) {
@@ -302,85 +341,332 @@ export const clubsRouter = createTRPCRouter({
         })
       }
 
-      // Hugging Face AI Moderation Check (KoalaAI/Text-Moderation)
-      if (process.env.HF_TOKEN) {
-        try {
-          const hf = new HfInference(process.env.HF_TOKEN);
-          // We verify both the title and content
-          const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
-          
-          const response = await hf.textClassification({
-            model: "KoalaAI/Text-Moderation",
-            inputs: textToCheck,
-          });
-
-          // Console log the result to debug/audit responses
-          console.log("AI Moderation Result:", response);
-
-          // The model returns an array of label objects. Usually 'OK' is the top score if it's safe.
-          // Since the model outputs multiple labels, we check the probability of 'OK' vs others.
-          const topResult = response[0];
-          
-          // Let's be explicit and define the unsafe categories based on KoalaAI/Text-Moderation
-          const unsafeLabels = ["S", "H", "V", "HR", "SH", "S3", "H2", "V2"];
-          
-          // If the model is not at least 95% confident it's OK, OR if an unsafe label scores higher than very low threshold
-          let isUnsafe = false;
-          let offendingLabel = topResult.label;
-
-          if (topResult.label === "OK" && topResult.score < 0.95) {
-             isUnsafe = true;
-             // Find the next highest unsafe label to explain why
-             const nextHighest = response.find(r => unsafeLabels.includes(r.label));
-             if (nextHighest) offendingLabel = nextHighest.label;
-          } else if (unsafeLabels.includes(topResult.label) && topResult.score > 0.05) {
-             isUnsafe = true;
-          }
-
-          if (isUnsafe) {
-            let reason = "inappropriate language";
-            
-            // Map the label to a friendly reason string
-            const reasonMap: Record<string, string> = {
-              "S": "sexual content",
-              "H": "hate speech",
-              "V": "violence",
-              "HR": "harassment",
-              "SH": "self-harm promotion",
-              "S3": "sexual content involving minors",
-              "H2": "threatening hate speech",
-              "V2": "graphic violence"
-            };
-            
-            if (reasonMap[offendingLabel]) {
-               reason = reasonMap[offendingLabel] as string;
-            }
-
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Your post violates community guidelines and contains ${reason}. Please revise it.`,
-            });
-          }
-        } catch (error: any) {
-          // If it's our own thrown TRPC error, re-throw it. Otherwise, log it but don't crash entirely if HF is down.
-          if (error instanceof TRPCError) throw error;
-          console.error("AI Moderation Warning: Failed to reach HuggingFace API. Post allowed by default. " + error);
+      // Content Moderation Check using in-house inference service
+      try {
+        const textToCheck = `Title: ${input.title}\nContent: ${input.content}`;
+        
+        // Use our in-house moderation API (will throw if content is unsafe or service unavailable)
+        await moderateText(textToCheck, {
+          throwOnUnsafe: true,
+          textThreshold: 0.02,
+        });
+      } catch (error: unknown) {
+        // If it's a TRPC error (content violation or service error), re-throw it
+        if (error instanceof TRPCError) {
+          throw error;
         }
+        // Log unexpected errors and reject content for safety
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify content safety. Please try again later.",
+        });
       }
 
-      const post = await prisma.post.create({
-        data: {
-          clubId: input.clubId,
-          authorId: ctx.userId,
-          title: input.title,
-          content: input.content,
-          type: input.type,
-        },
-      })
+      // Create post with images in transaction
+      const post = await prisma.$transaction(async (tx) => {
+        const newPost = await tx.post.create({
+          data: {
+            clubId: input.clubId,
+            authorId: ctx.user.id,
+            title: input.title,
+            content: input.content,
+            type: input.type,
+            status: input.type === "GENERAL" ? "PUBLISHED" : "DRAFT",
+          },
+        });
+
+        // Create post images if provided
+        if (input.imageUrls && input.imageUrls.length > 0) {
+          await tx.postImage.createMany({
+            data: input.imageUrls.map((url) => ({
+              postId: newPost.id,
+              imageUrl: url,
+            })),
+          });
+        }
+
+        return newPost;
+      });
+
       return { id: post.id, title: post.title, content: post.content, type: post.type, createdAt: post.createdAt.toISOString() }
     }),
 
-  getClubsList: baseProcedure
+  uploadPostImage: protectedProcedure
+    .input(
+      z.object({
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
+        fileName: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Moderate image first
+      try {
+        await moderateImage(input.base64Image, {
+          throwOnUnsafe: true,
+          imageThreshold: 0.3,
+        });
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify image safety. Please try again later.",
+        });
+      }
+
+      // Convert base64 to Blob
+      const blob = base64ToBlob(input.base64Image);
+
+      // Upload to Supabase
+      const result = await uploadFileToSupabase({
+        file: blob,
+        userId: ctx.user.id,
+        folder: "post-images",
+        fileName: input.fileName,
+        supabaseClient: ctx.supabase,
+      });
+
+      return {
+        imageUrl: result.publicUrl,
+      };
+    }),
+
+  uploadClubImage: protectedProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
+        fileName: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Check if user is president or vice president
+      const membership = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: ctx.user.id, clubId: input.clubId } },
+        select: { role: true },
+      });
+
+      if (!membership || (membership.role !== "PRESIDENT" && membership.role !== "VICE_PRESIDENT")) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only presidents and vice presidents can update club profile",
+        });
+      }
+
+      // Moderate image
+      try {
+        await moderateImage(input.base64Image, {
+          throwOnUnsafe: true,
+          imageThreshold: 0.3,
+        });
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify image safety. Please try again later.",
+        });
+      }
+
+      // Convert base64 to Blob
+      const blob = base64ToBlob(input.base64Image);
+
+      // Upload to Supabase
+      const result = await uploadFileToSupabase({
+        file: blob,
+        userId: ctx.user.id,
+        folder: "club-images",
+        fileName: input.fileName,
+        supabaseClient: ctx.supabase,
+      });
+
+      // Update club with new image
+      const club = await prisma.club.update({
+        where: { id: input.clubId },
+        data: { imageUrl: result.publicUrl },
+        select: { id: true, imageUrl: true },
+      });
+
+      return {
+        imageUrl: club.imageUrl,
+      };
+    }),
+
+  uploadClubBanner: protectedProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        base64Image: z
+          .string()
+          .max(
+            MAX_BASE64_IMAGE_CHARS,
+            "Image payload is too large. Please upload a smaller image."
+          ),
+        fileName: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Check if user is president or vice president
+      const membership = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: ctx.user.id, clubId: input.clubId } },
+        select: { role: true },
+      });
+
+      if (!membership || (membership.role !== "PRESIDENT" && membership.role !== "VICE_PRESIDENT")) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only presidents and vice presidents can update club profile",
+        });
+      }
+
+      // Moderate image
+      try {
+        await moderateImage(input.base64Image, {
+          throwOnUnsafe: true,
+          imageThreshold: 0.3,
+        });
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        console.error("Unexpected moderation error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Unable to verify image safety. Please try again later.",
+        });
+      }
+
+      // Convert base64 to Blob
+      const blob = base64ToBlob(input.base64Image);
+
+      // Upload to Supabase
+      const result = await uploadFileToSupabase({
+        file: blob,
+        userId: ctx.user.id,
+        folder: "club-banners",
+        fileName: input.fileName,
+        supabaseClient: ctx.supabase,
+      });
+
+      // Update club with new banner
+      const club = await prisma.club.update({
+        where: { id: input.clubId },
+        data: { bannerUrl: result.publicUrl },
+        select: { id: true, bannerUrl: true },
+      });
+
+      return {
+        bannerUrl: club.bannerUrl,
+      };
+    }),
+
+  updateClubProfile: protectedProcedure
+    .input(
+      z.object({
+        clubId: z.string(),
+        description: z.string().min(1).max(5000).optional(),
+        mission: z.string().max(2000).optional(),
+        instagramUrl: z.string().url().optional().nullable(),
+        websiteUrl: z.string().url().optional().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Check if user is president or vice president
+      const membership = await prisma.membership.findUnique({
+        where: { userId_clubId: { userId: ctx.user.id, clubId: input.clubId } },
+        select: { role: true },
+      });
+
+      if (!membership || (membership.role !== "PRESIDENT" && membership.role !== "VICE_PRESIDENT")) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only presidents and vice presidents can update club profile",
+        });
+      }
+
+      // If description is being updated, moderate it
+      if (input.description) {
+        try {
+          await moderateText(input.description, {
+            throwOnUnsafe: true,
+            textThreshold: 0.02,
+          });
+        } catch (error: unknown) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error("Unexpected moderation error:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to verify content safety. Please try again later.",
+          });
+        }
+      }
+
+      // If mission is being updated, moderate it
+      if (input.mission) {
+        try {
+          await moderateText(input.mission, {
+            throwOnUnsafe: true,
+            textThreshold: 0.02,
+          });
+        } catch (error: unknown) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          console.error("Unexpected moderation error:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to verify content safety. Please try again later.",
+          });
+        }
+      }
+
+      // Build update data object
+      const updateData: {
+        description?: string;
+        mission?: string | null;
+        instagramUrl?: string | null;
+        websiteUrl?: string | null;
+      } = {};
+
+      if (input.description !== undefined) updateData.description = input.description;
+      if (input.mission !== undefined) updateData.mission = input.mission || null;
+      if (input.instagramUrl !== undefined) updateData.instagramUrl = input.instagramUrl;
+      if (input.websiteUrl !== undefined) updateData.websiteUrl = input.websiteUrl;
+
+      // Update club
+      const club = await prisma.club.update({
+        where: { id: input.clubId },
+        data: updateData,
+        select: {
+          id: true,
+          description: true,
+          mission: true,
+          instagramUrl: true,
+          websiteUrl: true,
+        },
+      });
+
+      return club;
+    }),
+
+  getClubsList: protectedProcedure
     .input(
       z.object({
         page: z.number().min(1).default(1),
@@ -394,6 +680,7 @@ export const clubsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { page, limit, search, types, commitmentLevel, sort } = input;
       const skip = (page - 1) * limit;
+      const userId = ctx.user.id;
 
       // Determine Prisma orderBy from sort option
       let orderBy: Record<string, unknown> = { title: "asc" };
@@ -432,7 +719,7 @@ export const clubsRouter = createTRPCRouter({
           include: {
             _count: { select: { memberships: true } },
             memberships: {
-              where: { userId: ctx.userId },
+              where: { userId },
               select: { status: true },
             },
           },
@@ -480,7 +767,7 @@ export const clubsRouter = createTRPCRouter({
           include: {
             _count: { select: { memberships: true } },
             memberships: {
-              where: { userId: ctx.userId },
+              where: { userId },
               select: { status: true },
             },
           },
@@ -498,5 +785,58 @@ export const clubsRouter = createTRPCRouter({
         totalCount,
         totalPages: Math.ceil(totalCount / limit),
       };
+    }),
+
+  // Get popular clubs (fallback for recommendations)
+  getPopularClubs: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(20).default(6),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { limit } = input;
+      const userId = ctx.user.id;
+
+      // Get user's joined club IDs to exclude them
+      const userMemberships = await prisma.membership.findMany({
+        where: {
+          userId,
+          status: "ACCEPTED",
+        },
+        select: { clubId: true },
+      });
+      const joinedClubIds = userMemberships.map((m) => m.clubId);
+
+      // Query clubs by member count (popularity)
+      const clubs = await prisma.club.findMany({
+        where: {
+          id: { notIn: joinedClubIds },
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          types: true,
+          _count: {
+            select: { memberships: true },
+          },
+        },
+        orderBy: {
+          memberships: { _count: 'desc' },
+        },
+        take: limit,
+      });
+
+      return clubs.map((club) => ({
+        id: club.id,
+        title: club.title,
+        description: club.description,
+        imageUrl: club.imageUrl,
+        types: club.types,
+        memberCount: club._count.memberships,
+        score: 0, // No scoring for popular clubs
+      }));
     }),
 })
