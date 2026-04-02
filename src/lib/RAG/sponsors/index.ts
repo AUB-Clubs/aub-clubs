@@ -2,8 +2,13 @@
 import { openai } from '../config';
 import { prisma } from '@/lib/prisma';
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const data: string = fs.readFileSync("./sponsors.md", "utf8");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const data: string = fs.readFileSync(path.join(__dirname, "sponsors.md"), "utf8");
 
 function markdownSplitter(markdownText: string) {
   const regex = /^## (.+?)(?:\n([\s\S]*?))(?=^## |\Z)/gm;
