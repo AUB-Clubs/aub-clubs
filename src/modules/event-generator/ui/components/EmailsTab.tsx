@@ -11,13 +11,26 @@ interface Props {
   emails: EventEmail[];
 }
 
-function extractSubject(content: string): string {
-  const match = content.match(/subject[:\s]+([^\n]+)/i);
-  return match ? match[1].trim() : content.split("\n")[0].trim().slice(0, 60);
-}
+function parseEmail(content: string): { subject: string; body: string } {
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\\n/g, "\n").trim();
+  const lines = normalized.split("\n");
+  const subjectLineIndex = lines.findIndex((line) => /^subject\s*:/i.test(line));
 
-function extractPreview(content: string): string {
-  return content.replace(/subject[:\s]+[^\n]+\n?/i, "").trim().slice(0, 120);
+  if (subjectLineIndex === -1) {
+    return {
+      subject: lines[0]?.trim() || "No subject",
+      body: normalized,
+    };
+  }
+
+  const subjectLine = lines[subjectLineIndex] ?? "";
+  const subject = subjectLine.replace(/^subject\s*:/i, "").trim() || "No subject";
+  const body = lines
+    .filter((_, index) => index !== subjectLineIndex)
+    .join("\n")
+    .trim();
+
+  return { subject, body };
 }
 
 export default function EmailsTab({ emails }: Props) {
@@ -31,26 +44,29 @@ export default function EmailsTab({ emails }: Props) {
 
   return (
     <div className="space-y-3 p-4">
-      {emails.map((email) => (
-        <Card key={email.id} className="overflow-hidden">
-          <CardHeader className="pb-2 pt-3 px-4">
-            <div className="flex items-start gap-2">
-              <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <CardTitle className="text-sm font-medium">{email.name}</CardTitle>
-                <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                  {extractSubject(email.content)}
-                </p>
+      {emails.map((email) => {
+        const parsed = parseEmail(email.content);
+        return (
+          <Card key={email.id} className="overflow-hidden">
+            <CardHeader className="pb-2 pt-3 px-4">
+              <div className="flex items-start gap-2">
+                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-sm font-medium">{email.name}</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Subject: {parsed.subject}
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-              {extractPreview(email.content)}
-            </p>
-          </CardContent>
-        </Card>
-      ))}
+            </CardHeader>
+            <CardContent className="px-4 pb-3">
+              <pre className="whitespace-pre-wrap break-words text-xs font-sans leading-relaxed text-muted-foreground">
+                {parsed.body || parsed.subject}
+              </pre>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

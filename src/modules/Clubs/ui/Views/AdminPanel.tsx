@@ -569,7 +569,9 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
                           ? 'Analytics'
                           : activeSection === 'profile'
                             ? 'Club Profile'
-                            : 'Admin Panel'}
+                            : activeSection === 'event-generator'
+                              ? 'Event Generator'
+                              : 'Admin Panel'}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {activeSection

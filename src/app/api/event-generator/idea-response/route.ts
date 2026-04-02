@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inngest } from "@/inngest/client";
+import { requireBoardMember } from "../_auth";
 
 /**
  * POST /api/event-generator/idea-response
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  const auth = await requireBoardMember(clubId);
+  if ("error" in auth) return auth.error;
 
   await inngest.send({
     name: "event-generator/idea-response",

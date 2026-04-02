@@ -53,7 +53,18 @@ export const eventGeneratorRouter = createTRPCRouter({
         return prisma.message.findMany({
           where: { projectId: input.projectId },
           orderBy: { createdAt: "asc" },
-          include: { fragment: { include: fragmentInclude } },
+          include: {
+            fragment: { include: fragmentInclude },
+            chunks: {
+              select: {
+                id: true,
+                response: true,
+                sequence: true,
+                createdAt: true,
+              },
+              orderBy: { sequence: "asc" },
+            },
+          },
         });
       }),
 

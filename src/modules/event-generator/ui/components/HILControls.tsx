@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,8 @@ interface Props {
   clubId: string;
   projectId: string;
   hilState: HilState;
+  onOptimisticSubmit?: (state: HilState) => void;
+  onSubmissionFailed?: () => void;
 }
 
 const SCALE_OPTIONS = ["Small", "Medium", "Large"];
@@ -31,21 +33,41 @@ const TYPE_OPTIONS = [
   "Panel Discussion",
 ];
 
-export default function HILControls({ clubId, projectId, hilState }: Props) {
+export default function HILControls({
+  clubId,
+  projectId,
+  hilState,
+  onOptimisticSubmit,
+  onSubmissionFailed,
+}: Props) {
   const [selected, setSelected] = useState("");
   const [custom, setCustom] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [showEditNotes, setShowEditNotes] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    setSelected("");
+    setCustom("");
+    setEditNotes("");
+    setShowEditNotes(false);
+  }, [hilState.type]);
+
   const post = async (path: string, body: Record<string, unknown>) => {
+    onOptimisticSubmit?.(hilState);
     setLoading(true);
     try {
-      await fetch(`/api/event-generator/${path}`, {
+      const response = await fetch(`/api/event-generator/${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clubId, projectId, ...body }),
       });
+      if (!response.ok) {
+        throw new Error(`Failed to submit ${path}`);
+      }
+    } catch (error) {
+      onSubmissionFailed?.();
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -86,7 +108,9 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
         <Button
           size="sm"
           disabled={!resolvedValue || loading}
-          onClick={() => post("scale-response", { scale: resolvedValue })}
+          onClick={() => {
+            void post("scale-response", { scale: resolvedValue }).catch(() => {});
+          }}
         >
           Confirm
         </Button>
@@ -127,7 +151,9 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
         <Button
           size="sm"
           disabled={!resolvedValue || loading}
-          onClick={() => post("type-response", { type: resolvedValue })}
+          onClick={() => {
+            void post("type-response", { type: resolvedValue }).catch(() => {});
+          }}
         >
           Confirm
         </Button>
@@ -146,14 +172,16 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
           placeholder="e.g. Machine Learning, Web Development…"
           onKeyDown={(e) => {
             if (e.key === "Enter" && custom.trim() && !loading) {
-              post("topic-response", { topic: custom.trim() });
+              void post("topic-response", { topic: custom.trim() }).catch(() => {});
             }
           }}
         />
         <Button
           size="sm"
           disabled={!custom.trim() || loading}
-          onClick={() => post("topic-response", { topic: custom.trim() })}
+          onClick={() => {
+            void post("topic-response", { topic: custom.trim() }).catch(() => {});
+          }}
         >
           Confirm
         </Button>
@@ -167,6 +195,11 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
     return (
       <HILCard label="Select an event idea:">
         <RadioGroup value={selected} onValueChange={setSelected} className="space-y-2">
+          {hilState.ideas.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Suggested ideas are loading. You can still provide a custom idea below.
+            </p>
+          )}
           {hilState.ideas.map((idea, i) => (
             <div key={i} className="flex items-start gap-2">
               <RadioGroupItem value={idea} id={`idea-${i}`} className="mt-0.5" />
@@ -200,9 +233,9 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
         <Button
           size="sm"
           disabled={!resolvedValue || loading}
-          onClick={() =>
-            post("idea-response", { selectedIdea: resolvedValue })
-          }
+          onClick={() => {
+            void post("idea-response", { selectedIdea: resolvedValue }).catch(() => {});
+          }}
         >
           Confirm
         </Button>
@@ -227,9 +260,11 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
           <Button
             size="sm"
             disabled={loading}
-            onClick={() =>
-              post("event-approval", { approved: true, editNotes: "" })
-            }
+            onClick={() => {
+              void post("event-approval", { approved: true, editNotes: "" }).catch(
+                () => {}
+              );
+            }}
           >
             Approve
           </Button>
@@ -242,7 +277,7 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
                 setShowEditNotes(true);
                 return;
               }
-              post("event-approval", { approved: false, editNotes });
+              void post("event-approval", { approved: false, editNotes }).catch(() => {});
             }}
           >
             {showEditNotes ? "Submit Edits" : "Request Edits"}
@@ -269,9 +304,11 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
           <Button
             size="sm"
             disabled={loading}
-            onClick={() =>
-              post("email-approval", { approved: true, editNotes: "" })
-            }
+            onClick={() => {
+              void post("email-approval", { approved: true, editNotes: "" }).catch(
+                () => {}
+              );
+            }}
           >
             Approve All
           </Button>
@@ -284,7 +321,7 @@ export default function HILControls({ clubId, projectId, hilState }: Props) {
                 setShowEditNotes(true);
                 return;
               }
-              post("email-approval", { approved: false, editNotes });
+              void post("email-approval", { approved: false, editNotes }).catch(() => {});
             }}
           >
             {showEditNotes ? "Submit Edits" : "Request Edits"}

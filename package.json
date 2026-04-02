@@ -12,6 +12,7 @@
     "generate": "npx prisma generate",
     "seed": "npx tsx prisma/seed.ts",
     "studio": "npx prisma studio",
+    "ai": "npx -y inngest-cli@1.15.0 dev -u http://localhost:3000/api/inngest",
     "rag:hydrate:buildings": "tsx src/lib/RAG/buildings/index.ts",
     "rag:hydrate:sponsors": "tsx src/lib/RAG/sponsors/index.ts",
     "rag:hydrate:speakers": "tsx src/lib/RAG/speakers/index.ts",

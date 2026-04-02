@@ -52,5 +52,6 @@ ${event_report}
 ${modeBlock}
 
 ## Output Format
-Output ONLY the post text. No preamble, no markdown fences.`;
+Output ONLY the post text in plain text.
+No markdown syntax (no # headings, **bold**, or code fences).`;
 }

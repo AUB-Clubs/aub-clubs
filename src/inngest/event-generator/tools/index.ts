@@ -8,6 +8,7 @@ export { get_user_approval_emails } from "./hil/get-user-approval-emails";
 
 // Data tools
 export { log_event_details } from "./data/log-event-details";
+export { log_selected_idea } from "./data/log-selected-idea";
 export { log_sponsors_speakers_buildings } from "./data/log-sponsors-speakers-buildings";
 export { get_logged_event_data } from "./data/get-logged-event-data";
 export { queryRAG } from "./data/query-rag";

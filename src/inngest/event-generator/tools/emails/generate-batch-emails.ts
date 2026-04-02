@@ -1,11 +1,34 @@
-import { createTool, createAgent, openai } from "@inngest/agent-kit";
+import { createTool } from "@inngest/agent-kit";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { AgentState } from "../../types";
+import { generateTextWithOpenAI } from "../../openai";
 import { getAubAdminEmailPrompt } from "../../prompts/emails/aub-admin";
 import { getAnnouncementEmailPrompt } from "../../prompts/emails/announcement";
 import { getSponsorEmailPrompt } from "../../prompts/emails/sponsor";
 import { getSpeakerEmailPrompt } from "../../prompts/emails/speaker";
+
+function sanitizeEmailContent(content: string, clubName: string): string {
+  const normalized = content
+    .replace(/\r\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/^```(?:text|markdown)?\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  const withoutPlaceholders = normalized
+    .replace(/\[(?:your|insert)[^\]]*\]/gi, "")
+    .replace(/\{\{[^}]+\}\}/g, "")
+    .replace(/^\s*(?:my name is|i am)\s+[^\n]+$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (/(?:best regards|kind regards|regards|sincerely),?\s*$/i.test(withoutPlaceholders)) {
+    return `${withoutPlaceholders}\n${clubName} Team`;
+  }
+
+  return withoutPlaceholders;
+}
 
 function buildEmailPrompt(
   emailName: string,
@@ -50,16 +73,16 @@ function buildEmailPrompt(
 
 export const generate_batch_emails = createTool<AgentState>({
   name: "generate_batch_emails",
-  description: "Generates or modifies outreach emails. For new emails generates all concurrently. For edits targets a specific email by name.",
+  description: "Generates or modifies outreach emails using direct OpenAI calls. For new emails generates all concurrently. For edits targets a specific email by name.",
   parameters: z.object({
-    type: z.enum(["generate_new_emails", "modify_existing_email"]),
-    explanation: z.string(),
-    email_name: z.string().optional().describe("Name of email to modify. Empty for new generation."),
-    edits_requested: z.string().optional().describe("Requested changes. Empty for new generation."),
+    type: z.enum(["generate_new_emails", "modify_existing_email"]).describe("Whether to generate new emails or modify an existing one"),
+    explanation: z.string().describe("Explanation of what is being done"),
+    email_name: z.string().describe("Name of email to modify. Empty for new generation.").default(""),
+    edits_requested: z.string().describe("Requested changes. Empty for new generation.").default(""),
   }),
   handler: async ({ type, explanation, email_name, edits_requested }, { network }) => {
-    const { fragmentId, projectId, publishers } = network!.state.data;
-    const state = network!.state.data;
+    const state = network!.state.data as AgentState;
+    const { fragmentId, projectId, publishers } = state;
 
     await publishers.publishChunk(explanation);
 
@@ -86,19 +109,15 @@ export const generate_batch_emails = createTool<AgentState>({
 
       const emails = await Promise.all(
         emailNames.map(async (name) => {
-          const agent = createAgent({
-            name: `email-agent-${name}`,
-            system: buildEmailPrompt(name, eventReport, clubName, state),
-            model: openai({ model: "gpt-5.4" }),
+          const content = await generateTextWithOpenAI({
+            systemPrompt: buildEmailPrompt(name, eventReport, clubName, state),
+            userPrompt:
+              "Generate the final email now. Return only the final ready-to-send email text.",
           });
-          const { output } = await agent.run("Generate the email now.");
-          const content =
-            output[0]?.type === "text"
-              ? Array.isArray(output[0].content)
-                ? output[0].content.join("")
-                : output[0].content
-              : "";
-          return { name, content };
+          return {
+            name,
+            content: sanitizeEmailContent(content, clubName),
+          };
         })
       );
 
@@ -122,18 +141,19 @@ export const generate_batch_emails = createTool<AgentState>({
     const existing = state.emails?.find((e) => e.name === targetName);
     const previousContent = existing?.content;
 
-    const agent = createAgent({
-      name: `email-agent-edit`,
-      system: buildEmailPrompt(targetName, eventReport, clubName, state, previousContent, edits_requested),
-      model: openai({ model: "gpt-5.4" }),
+    const newContentRaw = await generateTextWithOpenAI({
+      systemPrompt: buildEmailPrompt(
+        targetName,
+        eventReport,
+        clubName,
+        state,
+        previousContent,
+        edits_requested
+      ),
+      userPrompt:
+        "Apply the edits and return the complete final ready-to-send email text only.",
     });
-    const { output } = await agent.run("Modify the email now.");
-    const newContent =
-      output[0]?.type === "text"
-        ? Array.isArray(output[0].content)
-          ? output[0].content.join("")
-          : output[0].content
-        : "";
+    const newContent = sanitizeEmailContent(newContentRaw, clubName);
 
     // Update state
     const updatedEmails = (state.emails ?? []).map((e) =>

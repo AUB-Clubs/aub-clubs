@@ -51,5 +51,6 @@ ${event_report}
 ${modeBlock}
 
 ## Output Format
-Output ONLY the message text. No preamble, no markdown fences.`;
+Output ONLY the message text in plain text.
+No markdown syntax (no # headings, **bold**, or code fences).`;
 }

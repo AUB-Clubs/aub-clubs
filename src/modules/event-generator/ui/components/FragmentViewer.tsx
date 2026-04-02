@@ -18,7 +18,7 @@ export default function FragmentViewer({ fragmentId }: Props) {
 
   if (isLoading) {
     return (
-      <div className="p-4 space-y-3">
+      <div className="h-full min-h-0 space-y-3 p-4">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-16 w-full" />
@@ -28,46 +28,36 @@ export default function FragmentViewer({ fragmentId }: Props) {
 
   if (!fragment) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 items-center justify-center text-sm text-muted-foreground">
         Fragment not found.
       </div>
     );
   }
 
   return (
-    <Tabs defaultValue="preview" className="flex h-full flex-col">
-      <div className="border-b px-4 pt-3 shrink-0">
+    <Tabs defaultValue="preview" className="flex h-full min-h-0 flex-col">
+      <div className="border-b px-4 h-14 flex items-center shrink-0">
         <TabsList className="h-8">
           <TabsTrigger value="preview" className="text-xs">
             Preview
           </TabsTrigger>
           <TabsTrigger value="emails" className="text-xs">
             Emails
-            {fragment.eventEmails.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {fragment.eventEmails.length}
-              </span>
-            )}
           </TabsTrigger>
           <TabsTrigger value="posts" className="text-xs">
             Posts
-            {fragment.eventPosts.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {fragment.eventPosts.length}
-              </span>
-            )}
           </TabsTrigger>
         </TabsList>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <TabsContent value="preview" className="mt-0 h-full">
+      <div className="flex-1 min-h-0">
+        <TabsContent value="preview" className="mt-0 h-full min-h-0 overflow-y-auto">
           <PreviewTab fragment={fragment} />
         </TabsContent>
-        <TabsContent value="emails" className="mt-0 h-full">
+        <TabsContent value="emails" className="mt-0 h-full min-h-0 overflow-y-auto">
           <EmailsTab emails={fragment.eventEmails} />
         </TabsContent>
-        <TabsContent value="posts" className="mt-0 h-full">
+        <TabsContent value="posts" className="mt-0 h-full min-h-0 overflow-y-auto">
           <PostsTab posts={fragment.eventPosts} image={fragment.eventImage} />
         </TabsContent>
       </div>

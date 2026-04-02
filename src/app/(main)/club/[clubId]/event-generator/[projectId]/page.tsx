@@ -12,7 +12,7 @@ export default async function ProjectPage({ params }: Props) {
   return (
     <Suspense
       fallback={
-        <div className="flex h-screen">
+        <div className="flex h-full min-h-0">
           <div className="flex w-1/2 flex-col gap-4 p-4 border-r">
             <Skeleton className="h-10 w-48 ml-auto" />
             <Skeleton className="h-16 w-64" />

@@ -28,6 +28,22 @@ const PLATFORM_ICONS: Record<string, string> = {
   forum: "📋",
 };
 
+function toPlainTextPost(content: string): string {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/^```(?:text|markdown|md)?\s*/i, "")
+    .replace(/```$/i, "")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)")
+    .replace(/^(\s*)[-*]\s+/gm, "$1- ")
+    .replace(/^(\s*)(\d+)\.\s+/gm, "$1$2) ")
+    .trim();
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -77,6 +93,7 @@ export default function PostsTab({ posts, image }: Props) {
 
       {posts.map((post) => {
         const icon = PLATFORM_ICONS[post.platform.toLowerCase()] ?? "📣";
+        const plainContent = toPlainTextPost(post.content);
         return (
           <Card key={post.id}>
             <CardHeader className="pb-2 pt-3 px-4">
@@ -85,12 +102,12 @@ export default function PostsTab({ posts, image }: Props) {
                   <span>{icon}</span>
                   {post.platform}
                 </CardTitle>
-                <CopyButton text={post.content} />
+                <CopyButton text={plainContent} />
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-3">
               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                {post.content}
+                {plainContent}
               </p>
             </CardContent>
           </Card>
