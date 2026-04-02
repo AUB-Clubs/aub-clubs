@@ -11,7 +11,11 @@
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
     "seed": "npx tsx prisma/seed.ts",
-    "studio": "npx prisma studio"
+    "studio": "npx prisma studio",
+    "rag:hydrate:buildings": "tsx src/lib/RAG/buildings/index.ts",
+    "rag:hydrate:sponsors": "tsx src/lib/RAG/sponsors/index.ts",
+    "rag:hydrate:speakers": "tsx src/lib/RAG/speakers/index.ts",
+    "rag:hydrate:all": "npm run rag:hydrate:buildings && npm run rag:hydrate:sponsors && npm run rag:hydrate:speakers"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
@@ -20,8 +24,10 @@
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
+    "@google/genai": "^1.48.0",
     "@hookform/resolvers": "^5.2.2",
     "@inngest/agent-kit": "^0.13.2",
+    "@inngest/realtime": "^0.4.6",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "@radix-ui/react-accordion": "^1.2.12",
