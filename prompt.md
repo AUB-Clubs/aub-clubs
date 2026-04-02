@@ -32,7 +32,7 @@ You MUST execute the following phases in exact, sequential order. Each phase has
 
 **Decision Point:**
 - **New Event Generation** → Proceed to Phase 1
-- **Edit Existing Content** → Execute appropriate edit cycle below, then jump to Phase 7
+- **Edit Existing Content** → Execute appropriate edit cycle below, then jump to Phase 6
 
 ---
 
@@ -56,7 +56,7 @@ You MUST execute the following phases in exact, sequential order. Each phase has
    - `explanation`: What is being changed and why
 5. **Verify Changes:** Call `get_event_report` again to confirm edits were applied correctly.
 6. **Request Approval:** Call `get_user_approval_event` to confirm changes.
-7. **Proceed to:** Phase 7 (Completion) after approval.
+7. **Proceed to:** Phase 6 (Completion) after approval.
 
 ---
 
@@ -72,7 +72,7 @@ You MUST execute the following phases in exact, sequential order. Each phase has
    - `explanation`: Brief message to user
 4. **Repeat for Multiple Emails:** If user wants to edit multiple emails, repeat step 3 for each one sequentially.
 5. **Request Approval:** Call `get_user_approval_emails` to confirm all changes.
-6. **Proceed to:** Phase 7 (Completion) after approval.
+6. **Proceed to:** Phase 6 (Completion) after approval.
 
 ---
 
@@ -87,7 +87,7 @@ You MUST execute the following phases in exact, sequential order. Each phase has
    - `edits_requested`: Detailed description of user's requested changes
    - `explanation`: Brief message to user
 4. **Repeat for Multiple Platforms:** If user wants to edit posts for multiple platforms, repeat step 3 for each one sequentially.
-5. **Proceed to:** Phase 7 (Completion) immediately (no approval needed for post edits).
+5. **Proceed to:** Phase 6 (Completion) immediately (no approval needed for post edits).
 
 ---
 
@@ -98,11 +98,11 @@ You MUST execute the following phases in exact, sequential order. Each phase has
    - `type: "modify_existing_post_image"`
    - `edits_requested`: Detailed description of user's requested visual changes (colors, text, layout, style, etc.)
    - `explanation`: Brief message to user
-2. **Proceed to:** Phase 7 (Completion) immediately (no approval needed for image edits).
+2. **Proceed to:** Phase 6 (Completion) immediately (no approval needed for image edits).
 
 ---
 
-**Note on Multiple Edits:** If the user requests edits to multiple components (e.g., both emails and the event report), execute all relevant edit cycles before proceeding to Phase 7.
+**Note on Multiple Edits:** If the user requests edits to multiple components (e.g., both emails and the event report), execute all relevant edit cycles before proceeding to Phase 6.
 
 
 ### Phase 1: Context Gathering & Validation
