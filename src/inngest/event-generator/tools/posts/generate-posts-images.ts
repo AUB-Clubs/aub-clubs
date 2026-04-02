@@ -1,38 +1,40 @@
-import { createTool, createAgent, openai } from "@inngest/agent-kit";
+import { createTool } from "@inngest/agent-kit";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { uploadFileToSupabase } from "@/lib/supabase-storage";
 import type { AgentState } from "../../types";
+import { generateTextWithOpenAI } from "../../openai";
 import {
   POSTER_GENERATION_PROMPT,
   buildPosterUserMessage,
 } from "../../prompts/image/poster-prompt";
 
 async function uploadToSupabase(imageBase64: string): Promise<string> {
-  const { supabase } = await import("@/lib/RAG/config");
-  const filename = `posters/${Date.now()}.png`;
   const buffer = Buffer.from(imageBase64, "base64");
 
-  const { error } = await supabase.storage
-    .from("event-images")
-    .upload(filename, buffer, { contentType: "image/png", upsert: true });
+  const uploaded = await uploadFileToSupabase({
+    file: new Blob([buffer], { type: "image/png" }),
+    userId: "event-generator",
+    fileName: `poster-${Date.now()}.png`,
+    folder: "posters",
+    bucket: "event-images",
+    upsert: true,
+  });
 
-  if (error) throw new Error("Supabase upload failed: " + error.message);
-
-  const { data } = supabase.storage.from("event-images").getPublicUrl(filename);
-  return data.publicUrl;
+  return uploaded.publicUrl;
 }
 
 export const generate_posts_images = createTool<AgentState>({
   name: "generate_posts_images",
-  description: "Generates or edits the promotional poster image using a 2-stage pipeline: prompt agent → Gemini image generation.",
+  description: "Generates or edits the promotional poster image using OpenAI prompt generation and Gemini image rendering.",
   parameters: z.object({
-    type: z.enum(["generate_new_post_image", "modify_existing_post_image"]),
-    explanation: z.string(),
-    edits_requested: z.string().optional(),
+    type: z.enum(["generate_new_post_image", "modify_existing_post_image"]).describe("Whether to generate a new image or modify the existing one"),
+    explanation: z.string().describe("Explanation of what is being done"),
+    edits_requested: z.string().describe("Requested changes for modifications. Empty for new generation.").default(""),
   }),
   handler: async ({ type, explanation, edits_requested }, { network }) => {
-    const { fragmentId, projectId, publishers } = network!.state.data;
-    const state = network!.state.data;
+    const state = network!.state.data as AgentState;
+    const { fragmentId, projectId, publishers } = state;
 
     await publishers.publishChunk(explanation);
 
@@ -53,7 +55,7 @@ export const generate_posts_images = createTool<AgentState>({
       selectedIdea: state.selectedIdea,
     };
 
-    // ── Stage 1: Generate image prompt via sub-agent ──────────────────────────
+    // ── Stage 1: Generate image prompt via OpenAI ─────────────────────────────
     await publishers.publishChunk("Crafting poster prompt…");
 
     let previousPrompt: string | undefined;
@@ -81,12 +83,6 @@ export const generate_posts_images = createTool<AgentState>({
       }
     }
 
-    const promptAgent = createAgent({
-      name: "image-prompt-generator",
-      system: POSTER_GENERATION_PROMPT,
-      model: openai({ model: "gpt-5.4" }),
-    });
-
     const userMessage = buildPosterUserMessage({
       event_report: eventReport,
       event_details: eventDetails,
@@ -94,13 +90,10 @@ export const generate_posts_images = createTool<AgentState>({
       edits_requested,
     });
 
-    const { output: promptOutput } = await promptAgent.run(userMessage);
-    const imagePrompt =
-      promptOutput[0]?.type === "text"
-        ? Array.isArray(promptOutput[0].content)
-          ? promptOutput[0].content.join("")
-          : promptOutput[0].content
-        : "";
+    const imagePrompt = await generateTextWithOpenAI({
+      systemPrompt: POSTER_GENERATION_PROMPT,
+      userPrompt: userMessage,
+    });
 
     // ── Stage 2: Generate image with Gemini ───────────────────────────────────
     await publishers.publishChunk("Generating poster with Gemini…");

@@ -11,7 +11,7 @@ export const provide_ideas_options = createTool<AgentState>({
     ideas_list: z.array(z.string()).length(3).describe("Exactly 3 event idea strings to present."),
   }),
   handler: async ({ explanation, ideas_list }, { step, network }) => {
-    const { clubId, projectId, fragmentId, publishers } = network!.state.data;
+    const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
     await publishers.publishChunk(explanation);
@@ -38,23 +38,14 @@ export const provide_ideas_options = createTool<AgentState>({
     const selectedIdea: string =
       response?.data.selectedIdea ?? ideas_list[0];
 
-    await step!.run("clear-awaiting-idea-and-save", async () => {
+    network!.state.data.selectedIdea = selectedIdea;
+
+    await step!.run("clear-awaiting-idea", async () => {
       await prisma.project.update({
         where: { id: projectId },
         data: { isAwaitingIdeaSelection: false },
       });
-
-      if (fragmentId) {
-        await prisma.eventDetails.upsert({
-          where: { fragmentId },
-          create: { fragmentId, selectedIdea },
-          update: { selectedIdea },
-        });
-      }
     });
-
-    // Save to state
-    network!.state.data.selectedIdea = selectedIdea;
 
     await publishers.publish({
       channel,

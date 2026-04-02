@@ -18,12 +18,12 @@ export default function ThinkingAccordion({ chunks, isComplete }: Props) {
   if (chunks.length === 0) return null;
 
   return (
-    <div className="rounded-md border bg-muted/30 text-sm overflow-hidden">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 text-sm overflow-hidden">
       <button
         onClick={() => setIsOpen((p) => !p)}
-        className="flex w-full items-center justify-between px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
+        className="flex w-full items-center justify-between px-3 py-2 hover:text-gray-800 transition-colors"
       >
-        <span className="font-medium text-xs">
+        <span className="font-medium text-xs animate-pulse">
           {isComplete ? "Thinking process" : "Thinking…"}
         </span>
         {isOpen ? (
@@ -35,7 +35,7 @@ export default function ThinkingAccordion({ chunks, isComplete }: Props) {
       {isOpen && (
         <div className="px-3 pb-3 space-y-1 max-h-40 overflow-y-auto">
           {chunks.map((chunk, i) => (
-            <p key={i} className="text-xs text-muted-foreground leading-relaxed">
+            <p key={i} className="text-xs text-gray-800 leading-relaxed">
               {chunk}
             </p>
           ))}

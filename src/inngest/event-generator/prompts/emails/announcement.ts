@@ -32,6 +32,8 @@ Your task is to write a single announcement email sent to all ${club_name} club 
 - Use casual-but-clear language suited for university students
 - Build excitement and a sense of community
 - Keep it concise — students skim emails
+- Do not use placeholders like [Your Name], [Your Email], or "my name is ..."
+- The email must be ready to send as-is
 
 ## Required Content
 The email MUST include:
@@ -49,5 +51,6 @@ ${event_report}
 ${modeBlock}
 
 ## Output Format
-Output ONLY the email text. Start with the subject line. No preamble, no markdown fences.`;
+Output ONLY the email text. Start with the subject line.
+Use plain text line breaks (real new lines), no markdown fences, and no placeholder tokens.`;
 }

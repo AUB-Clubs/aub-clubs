@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Plus, MessageSquare, Calendar } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -19,18 +20,28 @@ export default function ProjectListView({ clubId }: ProjectListViewProps) {
   const router = useRouter();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [initialPrompt, setInitialPrompt] = useState("");
 
   const { data: projects, isLoading } = trpc.eventGenerator.projects.list.useQuery({ clubId });
+
+  const sendMessage = trpc.eventGenerator.messages.send.useMutation({
+    onSuccess: (_, variables) => {
+      router.push(`/club/${clubId}/event-generator/${variables.projectId}`);
+    },
+  });
+
   const createProject = trpc.eventGenerator.projects.create.useMutation({
     onSuccess: (project) => {
       setShowCreateDialog(false);
+      const prompt = initialPrompt.trim();
       setProjectName("");
-      router.push(`/club/${clubId}/event-generator/${project.id}`);
+      setInitialPrompt("");
+      sendMessage.mutate({ projectId: project.id, value: prompt });
     },
   });
 
   const handleCreateProject = () => {
-    if (projectName.trim()) {
+    if (projectName.trim() && initialPrompt.trim()) {
       createProject.mutate({ clubId, name: projectName.trim() });
     }
   };
@@ -38,12 +49,6 @@ export default function ProjectListView({ clubId }: ProjectListViewProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">Event Generator</h2>
-            <p className="text-sm text-muted-foreground">AI-powered event planning assistant</p>
-          </div>
-        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
@@ -61,13 +66,7 @@ export default function ProjectListView({ clubId }: ProjectListViewProps) {
   return (
     <>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">Event Generator</h2>
-            <p className="text-sm text-muted-foreground">
-              AI-powered event planning assistant
-            </p>
-          </div>
+        <div className="flex justify-end">
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="mr-2 size-4" />
             New Project
@@ -142,6 +141,17 @@ export default function ProjectListView({ clubId }: ProjectListViewProps) {
                 }}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="prompt">Initial Prompt</Label>
+              <Textarea
+                id="prompt"
+                placeholder="Describe the event you want to generate…"
+                value={initialPrompt}
+                onChange={(e) => setInitialPrompt(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
@@ -149,9 +159,9 @@ export default function ProjectListView({ clubId }: ProjectListViewProps) {
             </Button>
             <Button
               onClick={handleCreateProject}
-              disabled={!projectName.trim() || createProject.isPending}
+              disabled={!projectName.trim() || !initialPrompt.trim() || createProject.isPending || sendMessage.isPending}
             >
-              {createProject.isPending ? "Creating..." : "Create Project"}
+              {createProject.isPending || sendMessage.isPending ? "Creating..." : "Create Project"}
             </Button>
           </DialogFooter>
         </DialogContent>

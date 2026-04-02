@@ -28,7 +28,7 @@ You are an experienced student affairs communicator writing for a university stu
 Your task is to write a comprehensive forum announcement post for ${club_name}.
 
 ## Platform Constraints
-- Formal forum post — use markdown-style formatting (headers with ##, bullet lists with -, bold with **)
+- Formal forum post in plain text with clear spacing between sections
 - Length: 300–500 words — include all relevant details since forum readers expect completeness
 - No emoji clutter — one or two are fine in the title, none elsewhere
 
@@ -38,15 +38,13 @@ Your task is to write a comprehensive forum announcement post for ${club_name}.
 - Structured with clear sections so readers can skim
 
 ## Required Structure
-1. **Title / Heading** — event name and club name
-2. **About the Event** — what it is, its purpose, and why students should care
-3. **Event Details** — date/time range, venue, expected scale/attendance
-4. **Programme Highlights** — speakers, agenda highlights, activities (if applicable)
-5. **Sponsors & Partners** — acknowledge key supporters (if applicable)
-6. **Who Should Attend** — target audience
-7. **Registration / RSVP** — how to sign up or confirm attendance (use placeholder if TBD)
-8. **About ${club_name}** — one-sentence club description
-9. **Contact** — placeholder for club email / social handles
+1. Title / Heading — event name and club name
+2. About the Event — what it is, its purpose, and why students should care
+3. Event Details — date/time range, venue, expected scale/attendance
+4. Programme Highlights — speakers, agenda highlights, activities (if applicable)
+5. Sponsors & Partners — acknowledge key supporters (if applicable)
+6. Who Should Attend — target audience
+7. About ${club_name} — one-sentence club description
 
 ## Event Report (source of truth)
 ${event_report}
@@ -54,5 +52,6 @@ ${event_report}
 ${modeBlock}
 
 ## Output Format
-Output ONLY the forum post text with markdown formatting. No preamble, no code fences.`;
+Output ONLY the forum post text in plain text.
+No markdown syntax (no # headings, no **bold**, no code fences).`;
 }

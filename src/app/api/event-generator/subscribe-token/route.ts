@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inngest } from "@/inngest/client";
 import { getSubscriptionToken } from "@inngest/realtime";
+import { requireBoardMember } from "../_auth";
 
 /**
  * GET /api/event-generator/subscribe-token?clubId=...&projectId=...
@@ -17,6 +18,9 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  const auth = await requireBoardMember(clubId);
+  if ("error" in auth) return auth.error;
 
   const token = await getSubscriptionToken(inngest, {
     channel: `club:${clubId}:project:${projectId}`,

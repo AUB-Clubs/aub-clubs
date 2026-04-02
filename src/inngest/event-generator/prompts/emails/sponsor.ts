@@ -43,6 +43,8 @@ Your task is to write a compelling sponsorship proposal email to a potential spo
 - Frame the partnership as mutually beneficial — lead with what the sponsor gains
 - Specific and concrete: reference the sponsor's actual contribution type
 - Respectful of the sponsor's time: concise and well-structured
+- Do not use placeholders like [Your Name], [Your Email], or "my name is ..."
+- The email must be ready to send as-is
 
 ## Sponsor Details
 - **Sponsor Name:** ${sponsor_name}
@@ -66,5 +68,6 @@ ${event_report}
 ${modeBlock}
 
 ## Output Format
-Output ONLY the email text. Start with the subject line. No preamble, no markdown fences.`;
+Output ONLY the email text. Start with the subject line.
+Use plain text line breaks (real new lines), no markdown fences, and no placeholder tokens.`;
 }

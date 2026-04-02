@@ -10,10 +10,8 @@ interface  AgentState {
 }
 
 export const eventFunction = inngest.createFunction(
-  {
-    id: "event-function",
-    triggers: { event: "aub-clubs/generate-event" },
-  },
+  { id: "event-function" },
+  { event: "aub-clubs/generate-event" },
   async ({ event, step }) => {
     const previousMessages = await step.run("get-previous messages", async () => {
       const formattedMessages: Message[] = []

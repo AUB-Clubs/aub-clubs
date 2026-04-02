@@ -45,6 +45,8 @@ Your task is to write a warm, respectful invitation email to a potential speaker
 - Personalised: reference why this specific person is the right fit
 - Clear about expectations: session topic, format, duration
 - Respectful of their time: easy to say yes or no
+- Do not use placeholders like [Your Name], [Your Email], or "my name is ..."
+- The email must be ready to send as-is
 
 ## Speaker Details
 - **Speaker Name:** ${speaker_name}
@@ -69,5 +71,6 @@ ${event_report}
 ${modeBlock}
 
 ## Output Format
-Output ONLY the email text. Start with the subject line. No preamble, no markdown fences.`;
+Output ONLY the email text. Start with the subject line.
+Use plain text line breaks (real new lines), no markdown fences, and no placeholder tokens.`;
 }

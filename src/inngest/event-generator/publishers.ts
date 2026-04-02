@@ -21,6 +21,7 @@ export interface Publishers {
 }
 
 export type FragmentUpdateType =
+  | "event_details"
   | "report"
   | "emails"
   | "posts"
@@ -43,14 +44,22 @@ export function createPublishers(opts: {
   const channel = `club:${clubId}:project:${projectId}`;
 
   const publishChunk: Publishers["publishChunk"] = async (text) => {
-    await prisma.messageChunk.create({
+    const chunk = await prisma.messageChunk.create({
       data: { messageId, response: text },
     });
 
     await publish({
       channel,
       topic: "ai",
-      data: { type: "chunk", clubId, projectId, messageId, text },
+      data: {
+        type: "chunk",
+        clubId,
+        projectId,
+        messageId,
+        text,
+        chunkId: chunk.id,
+        sequence: chunk.sequence,
+      },
     });
   };
 

@@ -5,7 +5,7 @@ import type { AgentState } from "../../types";
 
 export const get_logged_event_data = createTool<AgentState>({
   name: "get_logged_event_data",
-  description: "Retrieves all logged event data: scale, type, topic, selected idea, speakers, sponsors, and buildings.",
+  description: "Retrieves all logged event data: scale, type, topic, selected idea, speakers, sponsors, and buildings (including data logged via log_selected_idea).",
   parameters: z.object({
     explanation: z.string(),
   }),

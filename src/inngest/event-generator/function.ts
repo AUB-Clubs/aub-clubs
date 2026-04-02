@@ -9,10 +9,8 @@ import { lastAssistantTextMessageContent } from "../utils";
 import type { AgentState } from "./types";
 
 export const eventGeneratorFunction = inngest.createFunction(
-  {
-    id: "event-generator",
-    triggers: [{ event: "event-generator/run" }],
-  },
+  { id: "event-generator" },
+  { event: "event-generator/run" },
   async ({ event, step, publish }: { event: any; step: any; publish: any }) => {
     const { projectId, value } = event.data as {
       projectId: string;
