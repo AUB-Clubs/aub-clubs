@@ -23,6 +23,20 @@ export const eventGeneratorRouter = createTRPCRouter({
         return prisma.project.findUniqueOrThrow({ where: { id: input.projectId } });
       }),
 
+    list: protectedProcedure
+      .input(z.object({ clubId: z.string() }))
+      .query(async ({ input }) => {
+        return prisma.project.findMany({
+          where: { clubId: input.clubId },
+          orderBy: { createdAt: "desc" },
+          include: {
+            _count: {
+              select: { messages: true },
+            },
+          },
+        });
+      }),
+
     create: protectedProcedure
       .input(z.object({ clubId: z.string(), name: z.string().min(1) }))
       .mutation(async ({ input }) => {

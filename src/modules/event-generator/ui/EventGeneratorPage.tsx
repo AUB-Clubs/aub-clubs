@@ -8,9 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SendHorizontal } from "lucide-react";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import ChatMessage from "./components/ChatMessage";
 import FragmentViewer from "./components/FragmentViewer";
 import HILControls, { type HilState } from "./components/HILControls";
+import MobileBlockScreen from "./components/MobileBlockScreen";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
