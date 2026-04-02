@@ -11,7 +11,8 @@ export const provide_ideas_options = createTool<AgentState>({
     ideas_list: z.array(z.string()).length(3).describe("Exactly 3 event idea strings to present."),
   }),
   handler: async ({ explanation, ideas_list }, { step, network }) => {
-    const { projectId, fragmentId, publishers } = network!.state.data;
+    const { clubId, projectId, fragmentId, publishers } = network!.state.data;
+    const channel = `club:${clubId}:project:${projectId}`;
 
     await publishers.publishChunk(explanation);
 
@@ -23,15 +24,15 @@ export const provide_ideas_options = createTool<AgentState>({
     });
 
     await publishers.publish({
-      channel: `club:${network!.state.data.clubId}:project:${projectId}`,
+      channel,
       topic: "ai",
-      data: { type: "awaiting_idea_selection", ideas: ideas_list },
+      data: { type: "awaiting_idea_selection", clubId, projectId, ideas: ideas_list },
     });
 
     const response = await step!.waitForEvent("wait-for-idea", {
       event: "event-generator/idea-response",
       timeout: "15m",
-      if: `async.data.projectId == '${projectId}'`,
+      if: `async.data.clubId == '${clubId}' && async.data.projectId == '${projectId}'`,
     });
 
     const selectedIdea: string =
@@ -56,9 +57,9 @@ export const provide_ideas_options = createTool<AgentState>({
     network!.state.data.selectedIdea = selectedIdea;
 
     await publishers.publish({
-      channel: `club:${network!.state.data.clubId}:project:${projectId}`,
+      channel,
       topic: "ai",
-      data: { type: "hil_completed", hilType: "idea_selection" },
+      data: { type: "hil_completed", hilType: "idea_selection", clubId, projectId },
     });
 
     return selectedIdea;
