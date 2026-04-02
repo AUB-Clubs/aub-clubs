@@ -29,6 +29,8 @@ export interface EventPostData {
   content: string;
 }
 
+import type { Publishers } from "./publishers";
+
 // ─── Agent Network State ──────────────────────────────────────────────────────
 // Stored in createState<AgentState>() — persists across tool calls within a run.
 // Tools read from and write to this state so downstream phases always have
@@ -36,6 +38,7 @@ export interface EventPostData {
 
 export interface AgentState {
   // ── Run metadata ────────────────────────────────────────────────────────────
+  clubId: string;
   projectId: string;
   fragmentId: string | null;
   club: {
@@ -47,6 +50,8 @@ export interface AgentState {
   time: string;
   /** Set when agent outputs <task_summary>…</task_summary> — signals network to stop */
   summary: string;
+  /** Publisher helpers injected by the main function (not serialized — recreated each run) */
+  publishers: Publishers;
 
   // ── Phase 1: gathered parameters ────────────────────────────────────────────
   scale: string;
