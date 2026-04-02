@@ -10,7 +10,8 @@ export const get_user_approval_emails = createTool<AgentState>({
     explanation: z.string().describe("Brief message to the user requesting email approval."),
   }),
   handler: async ({ explanation }, { step, network }) => {
-    const { projectId, publishers } = network!.state.data;
+    const { clubId, projectId, publishers } = network!.state.data;
+    const channel = `club:${clubId}:project:${projectId}`;
 
     await publishers.publishChunk(explanation);
 
@@ -22,15 +23,15 @@ export const get_user_approval_emails = createTool<AgentState>({
     });
 
     await publishers.publish({
-      channel: `club:${network!.state.data.clubId}:project:${projectId}`,
+      channel,
       topic: "ai",
-      data: { type: "awaiting_email_approval" },
+      data: { type: "awaiting_email_approval", clubId, projectId },
     });
 
     const response = await step!.waitForEvent("wait-for-email-approval", {
       event: "event-generator/email-approval",
       timeout: "30m",
-      if: `async.data.projectId == '${projectId}'`,
+      if: `async.data.clubId == '${clubId}' && async.data.projectId == '${projectId}'`,
     });
 
     await step!.run("clear-awaiting-email-approval", async () => {
@@ -41,9 +42,9 @@ export const get_user_approval_emails = createTool<AgentState>({
     });
 
     await publishers.publish({
-      channel: `club:${network!.state.data.clubId}:project:${projectId}`,
+      channel,
       topic: "ai",
-      data: { type: "hil_completed", hilType: "email_approval" },
+      data: { type: "hil_completed", hilType: "email_approval", clubId, projectId },
     });
 
     const approved: boolean = response?.data.approved ?? false;

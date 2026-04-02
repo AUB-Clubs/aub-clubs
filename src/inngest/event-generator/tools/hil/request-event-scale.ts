@@ -10,7 +10,8 @@ export const request_event_scale = createTool<AgentState>({
     explanation: z.string().describe("Brief message to the user explaining why scale is needed."),
   }),
   handler: async ({ explanation }, { step, network }) => {
-    const { projectId, publishers } = network!.state.data;
+    const { clubId, projectId, publishers } = network!.state.data;
+    const channel = `club:${clubId}:project:${projectId}`;
 
     await publishers.publishChunk(explanation);
 
@@ -22,15 +23,15 @@ export const request_event_scale = createTool<AgentState>({
     });
 
     await publishers.publish({
-      channel: `club:${network!.state.data.clubId}:project:${projectId}`,
+      channel,
       topic: "ai",
-      data: { type: "awaiting_event_scale" },
+      data: { type: "awaiting_event_scale", clubId, projectId },
     });
 
     const response = await step!.waitForEvent("wait-for-scale", {
       event: "event-generator/scale-response",
       timeout: "15m",
-      if: `async.data.projectId == '${projectId}'`,
+      if: `async.data.clubId == '${clubId}' && async.data.projectId == '${projectId}'`,
     });
 
     await step!.run("clear-awaiting-scale", async () => {
@@ -41,9 +42,9 @@ export const request_event_scale = createTool<AgentState>({
     });
 
     await publishers.publish({
-      channel: `club:${network!.state.data.clubId}:project:${projectId}`,
+      channel,
       topic: "ai",
-      data: { type: "hil_completed", hilType: "event_scale" },
+      data: { type: "hil_completed", hilType: "event_scale", clubId, projectId },
     });
 
     return response?.data.scale ?? "No response";
