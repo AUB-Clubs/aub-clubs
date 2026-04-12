@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { createTRPCRouter } from '../../../trpc/init';
 import { prisma } from '@/lib/prisma';
 import { protectedProcedure, authProcedure } from '@/modules/auth/server/middleware';
+import { isUniversityAdminEmail } from '@/modules/auth/server/university-admin';
 import { moderateImage } from '@/modules/moderation/server/moderation';
 import { uploadFileToSupabase } from '@/lib/supabase-storage';
 
@@ -65,8 +66,10 @@ export const profileRouter = createTRPCRouter({
         },
       });
       if (!user) return null;
+      const isSelf = userId === ctx.user.id;
       return {
         ...user,
+        isUniversityAdmin: isSelf ? isUniversityAdminEmail(user.email) : false,
         registered_clubs: user.memberships.map((m) => ({
           role: m.role,
           club: {

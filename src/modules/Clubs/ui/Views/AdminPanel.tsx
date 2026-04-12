@@ -59,6 +59,7 @@ import {
   ArrowLeft,
   Calendar,
   BarChart,
+  Wallet,
   Settings2,
   ImageIcon,
   Upload,
@@ -114,14 +115,25 @@ function formatDate(iso: string) {
 
 import { EventsSection } from '../components/AdminEventsSection'
 import { AnalyticsSection } from '../components/AdminAnalyticsSection'
+import { FinanceSection } from '../components/AdminFinanceSection'
 
 export interface AdminPanelProps {
   clubId: string
-  initialSection?: 'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null
+  initialSection?:
+    | 'members'
+    | 'requests'
+    | 'announcements'
+    | 'events'
+    | 'analytics'
+    | 'finance'
+    | 'profile'
+    | null
 }
 
 export default function AdminPanel({ clubId, initialSection = null }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null>(initialSection)
+  const [activeSection, setActiveSection] = useState<
+    'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'finance' | 'profile' | null
+  >(initialSection)
 
   // Auth check: only president / vice can access
   const membershipQuery = trpc.clubs.getMembership.useQuery(
@@ -565,9 +577,11 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
                         ? 'Events'
                         : activeSection === 'analytics'
                           ? 'Analytics'
-                          : activeSection === 'profile'
-                            ? 'Club Profile'
-                            : 'Admin Panel'}
+                          : activeSection === 'finance'
+                            ? 'Funding'
+                            : activeSection === 'profile'
+                              ? 'Club Profile'
+                              : 'Admin Panel'}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {activeSection
@@ -685,6 +699,25 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
             </button>
 
             <button
+              onClick={() => setActiveSection('finance')}
+              className="group text-left"
+            >
+              <Card className="h-full rounded-2xl border-0 bg-card/80 shadow-sm ring-1 ring-border/50 transition-all hover:shadow-md hover:ring-emerald-500/30 cursor-pointer">
+                <CardContent className="flex flex-col items-start gap-3 pt-6">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-emerald-500/10 transition-colors group-hover:bg-emerald-500/20">
+                    <Wallet className="size-6 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Funding</p>
+                    <p className="text-sm text-muted-foreground">
+                      Log funding received and spending
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
+
+            <button
               onClick={() => setActiveSection('profile')}
               className="group text-left"
             >
@@ -720,6 +753,9 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
         )}
         {activeSection === 'analytics' && (
           <AnalyticsSection clubId={clubId} />
+        )}
+        {activeSection === 'finance' && (
+          <FinanceSection clubId={clubId} />
         )}
         {activeSection === 'profile' && (
           <ClubProfileSection clubId={clubId} />
