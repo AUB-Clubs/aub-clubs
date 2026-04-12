@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { EditProfilePicture } from './components/edit-profile-picture'
+import { EditProfilePicture } from '@/modules/students/ui/components/edit-profile-picture'
 import { toast } from 'sonner'
 
 type ProfileFormState = {

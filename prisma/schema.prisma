@@ -158,6 +158,7 @@ model Club {
   scheduledEvents Event[]
 
   @@map("clubs")
+  clubFinances ClubFinance[]
 }
 
 model Membership {
@@ -413,4 +414,22 @@ model CommentLike {
   @@unique([userId, commentId])
   @@index([commentId])
   @@map("comment_likes")
+}
+
+model ClubFinance {
+  id        String   @id @default(uuid())
+  clubId    String
+  amount    Float
+  type      FinanceType
+  description String?
+  createdAt DateTime @default(now())
+
+  club      Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+}
+
+enum FinanceType {
+  INCOME
+  EXPENSE
 }

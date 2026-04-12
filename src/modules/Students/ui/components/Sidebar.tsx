@@ -26,6 +26,7 @@ import {
   Compass,
   Calendar,
   LogOut,
+  Landmark,
 } from 'lucide-react';
 import { createClient } from '@/modules/auth/lib/supabase-client';
 import { toast } from 'sonner';
@@ -59,6 +60,9 @@ export function AppSidebar() {
     { title: "My Clubs", url: "/me", icon: Home },
     { title: "Calendar", url: "/calendar", icon: Calendar },
     { title: "Clubs", url: "/clubs", icon: Users },
+    ...(user?.isUniversityAdmin
+      ? [{ title: "Admin reports", url: "/admin/reports", icon: Landmark } as const]
+      : []),
   ];
 
   return (
