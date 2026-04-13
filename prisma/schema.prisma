@@ -99,6 +99,11 @@ enum ScheduleInferenceStatus {
   FAILED
   REJECTED
 }
+enum ClubStatus {
+  PENDING_REVIEW
+  ACTIVE
+  INACTIVE
+}
 
 // --------------------
 // Models
@@ -148,6 +153,8 @@ model Club {
   instagramUrl String? @map("instagram_url")
   websiteUrl   String? @map("website_url")
   defaultEventColor String? @default("#2563EB") @map("default_event_color")
+
+  status ClubStatus @default(PENDING_REVIEW)
 
   types ClubType[] // Cloud Native PG handles scalar arrays natively
 
