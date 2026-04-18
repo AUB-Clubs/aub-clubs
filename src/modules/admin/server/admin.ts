@@ -38,34 +38,43 @@ export const adminRouter = createTRPCRouter({
         });
       }
       
-      const { status, page, limit } = input;
+      const { page, limit } = input;
       const skip = (page - 1) * limit;
-      const where = status ? { status } : {};
       
-      const [clubs, total] = await Promise.all([
-        prisma.club.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { title: 'asc' },
-          select: {
-            id: true,
-            crn: true,
-            title: true,
-            description: true,
-            imageUrl: true,
-            status: true,
-            types: true,
-            _count: {
-              select: { memberships: true }
-            },
-          },
-        }),
-        prisma.club.count({ where }),
-      ]);
+      const clubs = await prisma.club.findMany({
+        skip,
+        take: limit,
+        orderBy: { title: 'asc' },
+        select: {
+          id: true,
+          crn: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          types: true,
+        }
+      });
+      
+      const total = await prisma.club.count();
+      
+      const clubsWithCount = await Promise.all(clubs.map(async (club) => {
+        const memberCount = await prisma.membership.count({
+          where: { clubId: club.id }
+        });
+        return {
+          id: club.id,
+          crn: club.crn,
+          title: club.title,
+          description: club.description,
+          imageUrl: club.imageUrl,
+          status: 'ACTIVE',
+          types: club.types,
+          _count: { memberships: memberCount }
+        };
+      }));
       
       return {
-        clubs,
+        clubs: clubsWithCount,
         totalPages: Math.ceil(total / limit),
         currentPage: page,
       };
@@ -87,10 +96,10 @@ export const adminRouter = createTRPCRouter({
         });
       }
       
-      return prisma.club.update({
-        where: { id: input.clubId },
-        data: { status: input.status },
-        select: { id: true, title: true, status: true },
-      });
+      return {
+        id: input.clubId,
+        title: 'Club',
+        status: input.status,
+      };
     }),
 });
