@@ -133,8 +133,27 @@ model User {
   scheduleInferenceJobs ScheduleInferenceJob[]
   comments            Comment[]
   commentLikes        CommentLike[]
-  
+  microsoftCalendarLink UserMicrosoftCalendarLink?
+
   @@map("users")
+}
+
+/// Delegated OAuth link to Microsoft Graph (Outlook calendar). Refresh token stored encrypted at rest.
+model UserMicrosoftCalendarLink {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique @map("user_id")
+  tenantId               String?  @map("tenant_id")
+  msUserId               String?  @map("ms_user_id")
+  accountEmail           String?  @map("account_email")
+  encryptedRefreshToken  String   @map("encrypted_refresh_token") @db.Text
+  tokenExpiresAt         DateTime @map("token_expires_at")
+  scopes                 String   @db.Text
+  connectedAt            DateTime @default(now()) @map("connected_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_microsoft_calendar_links")
 }
 
 model Club {
