@@ -14,6 +14,7 @@ const ALLOWED_SECTIONS = [
   'analytics',
   'finance',
   'profile',
+  'event-generator'
 ] as const
 type AdminSection = (typeof ALLOWED_SECTIONS)[number]
 
