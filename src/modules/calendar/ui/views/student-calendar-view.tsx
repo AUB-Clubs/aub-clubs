@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -15,8 +15,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScheduleUploadDialog } from "@/modules/schedule-inference/ui/components/schedule-upload-dialog";
+import { CalendarConflictsPanel } from "@/modules/calendar/ui/components/calendar-conflicts-panel";
+import {
+  buildConflictRows,
+  clubEventOverlapSeverity,
+  overlapsForClubEvent,
+} from "@/modules/calendar/ui/lib/busy-and-conflicts";
 
 const COLOR_OPTIONS = ["#1D4ED8", "#2563EB", "#0F766E", "#16A34A", "#CA8A04", "#DC2626", "#C026D3", "#7C3AED"];
+const OUTLOOK_COLOR = "#64748B";
 
 type ScheduleEvent = {
   id: string;
@@ -45,7 +52,15 @@ type ClubEvent = {
   viewerStatus: "REGISTERED" | "WAITLIST" | "CHECKED_IN" | null;
 };
 
-type Weekday = ScheduleEvent["dayOfWeek"];
+type OutlookEvent = {
+  id: string;
+  title: string;
+  startsAt: Date | string;
+  endsAt: Date | string;
+  isAllDay: boolean;
+  allDayStartDate: string | null;
+  allDayEndExclusiveDate: string | null;
+};
 
 const dayOffset: Record<ScheduleEvent["dayOfWeek"], number> = {
   MONDAY: 1,
@@ -57,28 +72,6 @@ const dayOffset: Record<ScheduleEvent["dayOfWeek"], number> = {
   SUNDAY: 0,
 };
 
-function weekdayFromDate(dateInput: Date): Weekday {
-  const day = dateInput.getDay();
-  if (day === 0) return "SUNDAY";
-  if (day === 1) return "MONDAY";
-  if (day === 2) return "TUESDAY";
-  if (day === 3) return "WEDNESDAY";
-  if (day === 4) return "THURSDAY";
-  if (day === 5) return "FRIDAY";
-  return "SATURDAY";
-}
-
-function toMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function overlapMinutes(startA: number, endA: number, startB: number, endB: number): number {
-  const start = Math.max(startA, startB);
-  const end = Math.min(endA, endB);
-  return Math.max(0, end - start);
-}
-
 function formatEventRange(arg: EventContentArg): string {
   const start = arg.event.start;
   const end = arg.event.end;
@@ -89,9 +82,10 @@ function formatEventRange(arg: EventContentArg): string {
 }
 
 function prettyViewerStatus(status: string | null): string {
-  if (!status) return "Not RSVPed";
+  if (!status) return "Not going";
   if (status === "CHECKED_IN") return "Checked in";
-  return "Registered";
+  if (status === "WAITLIST") return "Waitlist";
+  return "Going";
 }
 
 function toDateWithTime(baseDate: Date, hhmm: string): Date {
@@ -100,6 +94,11 @@ function toDateWithTime(baseDate: Date, hhmm: string): Date {
   copy.setHours(h, m, 0, 0);
   return copy;
 }
+
+type SelectedEvent =
+  | { kind: "club"; id: string }
+  | { kind: "schedule"; id: string }
+  | { kind: "outlook"; id: string };
 
 export function StudentCalendarView() {
   const utils = trpc.useUtils();
@@ -112,7 +111,7 @@ export function StudentCalendarView() {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [selected, setSelected] = useState<{ kind: "club" | "schedule"; id: string } | null>(null);
+  const [selected, setSelected] = useState<SelectedEvent | null>(null);
   const [selectedScheduleColor, setSelectedScheduleColor] = useState("#1D4ED8");
   const [form, setForm] = useState({
     courseCode: "",
@@ -123,6 +122,33 @@ export function StudentCalendarView() {
   });
 
   const calendarQuery = trpc.calendar.getStudentCalendar.useQuery(range);
+  const msStatusQuery = trpc.calendar.getMicrosoftConnectionStatus.useQuery();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("ms_connected");
+    const err = params.get("ms_error");
+    if (!connected && !err) return;
+    if (connected) {
+      toast.success("Microsoft calendar connected.");
+      void utils.calendar.getMicrosoftConnectionStatus.invalidate();
+      void utils.calendar.getStudentCalendar.invalidate();
+    }
+    if (err) {
+      toast.error(decodeURIComponent(err));
+    }
+    window.history.replaceState(null, "", "/calendar");
+  }, [utils]);
+
+  const disconnectMsMutation = trpc.calendar.disconnectMicrosoft.useMutation({
+    onSuccess: async () => {
+      await utils.calendar.getMicrosoftConnectionStatus.invalidate();
+      await utils.calendar.getStudentCalendar.invalidate();
+      toast.success("Microsoft calendar disconnected.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const createMutation = trpc.calendar.createScheduleItem.useMutation({
     onSuccess: async () => {
@@ -152,7 +178,7 @@ export function StudentCalendarView() {
   const rsvpMutation = trpc.clubs.events.rsvpToEvent.useMutation({
     onSuccess: async (data) => {
       await utils.calendar.getStudentCalendar.invalidate();
-      toast.success(`RSVP status: ${prettyViewerStatus(data.status)}`);
+      toast.success(prettyViewerStatus(data.status));
     },
     onError: (error) => toast.error(error.message),
   });
@@ -160,30 +186,43 @@ export function StudentCalendarView() {
   const cancelRsvpMutation = trpc.clubs.events.cancelRsvp.useMutation({
     onSuccess: async () => {
       await utils.calendar.getStudentCalendar.invalidate();
-      toast.success("RSVP cancelled");
+      toast.success("Marked as not going.");
     },
     onError: (error) => toast.error(error.message),
   });
 
+  const scheduleForBusy = useMemo(() => {
+    const schedule = (calendarQuery.data?.schedule ?? []) as ScheduleEvent[];
+    return schedule.map((s) => ({
+      id: s.id,
+      courseCode: s.courseCode,
+      dayOfWeek: s.dayOfWeek,
+      startTime: s.startTime,
+      endTime: s.endTime,
+    }));
+  }, [calendarQuery.data?.schedule]);
+
+  const outlookForBusy = useMemo(() => {
+    const list = (calendarQuery.data?.outlookEvents ?? []) as OutlookEvent[];
+    return list.map((o) => ({
+      id: o.id,
+      title: o.title,
+      startsAt: o.startsAt,
+      endsAt: o.endsAt,
+      isAllDay: o.isAllDay,
+    }));
+  }, [calendarQuery.data?.outlookEvents]);
+
+  const conflictRows = useMemo(() => {
+    const clubEvents = (calendarQuery.data?.clubEvents ?? []) as ClubEvent[];
+    return buildConflictRows(clubEvents, scheduleForBusy, outlookForBusy, range.rangeStart, range.rangeEnd);
+  }, [calendarQuery.data?.clubEvents, scheduleForBusy, outlookForBusy, range.rangeStart, range.rangeEnd]);
+
   const events = useMemo(() => {
     const schedule = (calendarQuery.data?.schedule ?? []) as ScheduleEvent[];
     const clubEvents = (calendarQuery.data?.clubEvents ?? []) as ClubEvent[];
+    const outlookEvents = (calendarQuery.data?.outlookEvents ?? []) as OutlookEvent[];
     const rows: Array<Record<string, unknown>> = [];
-    const scheduleByDay = schedule.reduce<Record<Weekday, ScheduleEvent[]>>(
-      (acc, item) => {
-        acc[item.dayOfWeek].push(item);
-        return acc;
-      },
-      {
-        MONDAY: [],
-        TUESDAY: [],
-        WEDNESDAY: [],
-        THURSDAY: [],
-        FRIDAY: [],
-        SATURDAY: [],
-        SUNDAY: [],
-      }
-    );
 
     const start = new Date(range.rangeStart);
     const end = new Date(range.rangeEnd);
@@ -211,18 +250,44 @@ export function StudentCalendarView() {
       }
     }
 
+    for (const o of outlookEvents) {
+      if (o.isAllDay && o.allDayStartDate && o.allDayEndExclusiveDate) {
+        rows.push({
+          id: `outlook-${o.id}`,
+          title: `Outlook: ${o.title}`,
+          allDay: true,
+          start: o.allDayStartDate,
+          end: o.allDayEndExclusiveDate,
+          backgroundColor: OUTLOOK_COLOR,
+          borderColor: OUTLOOK_COLOR,
+          textColor: "#fff",
+          extendedProps: { kind: "outlook", outlookId: o.id },
+        });
+      } else {
+        rows.push({
+          id: `outlook-${o.id}`,
+          title: `Outlook: ${o.title}`,
+          start: new Date(o.startsAt),
+          end: new Date(o.endsAt),
+          backgroundColor: OUTLOOK_COLOR,
+          borderColor: OUTLOOK_COLOR,
+          textColor: "#fff",
+          extendedProps: { kind: "outlook", outlookId: o.id },
+        });
+      }
+    }
+
     for (const event of clubEvents) {
+      const { overlapPercent, overlapSeverity } = clubEventOverlapSeverity(
+        event,
+        scheduleForBusy,
+        outlookForBusy,
+        range.rangeStart,
+        range.rangeEnd
+      );
+
       const startsAt = new Date(event.startsAt);
       const endsAt = event.endsAt ? new Date(event.endsAt) : new Date(startsAt.getTime() + 60 * 60 * 1000);
-      const eventStartMin = startsAt.getHours() * 60 + startsAt.getMinutes();
-      const eventEndMin = endsAt.getHours() * 60 + endsAt.getMinutes();
-      const eventDuration = Math.max(1, eventEndMin - eventStartMin);
-      const daySchedule = scheduleByDay[weekdayFromDate(startsAt)];
-      const totalOverlap = daySchedule.reduce((sum, item) => {
-        return sum + overlapMinutes(eventStartMin, eventEndMin, toMinutes(item.startTime), toMinutes(item.endTime));
-      }, 0);
-      const overlapPercent = Math.min(100, (totalOverlap / eventDuration) * 100);
-      const overlapSeverity = overlapPercent >= 80 ? "full" : overlapPercent > 0 ? "partial" : "none";
 
       rows.push({
         id: `club-${event.id}`,
@@ -248,12 +313,36 @@ export function StudentCalendarView() {
     }
 
     return rows;
-  }, [calendarQuery.data, range.rangeStart, range.rangeEnd, selected, selectedScheduleColor]);
+  }, [
+    calendarQuery.data,
+    range.rangeStart,
+    range.rangeEnd,
+    selected,
+    selectedScheduleColor,
+    scheduleForBusy,
+    outlookForBusy,
+  ]);
 
   const selectedClubEvent =
     selected?.kind === "club"
       ? ((calendarQuery.data?.clubEvents ?? []).find((event) => event.id === selected.id) as ClubEvent | undefined)
       : undefined;
+
+  const selectedOutlookEvent =
+    selected?.kind === "outlook"
+      ? ((calendarQuery.data?.outlookEvents ?? []).find((event) => event.id === selected.id) as OutlookEvent | undefined)
+      : undefined;
+
+  const selectedClubConflicts =
+    selectedClubEvent != null
+      ? overlapsForClubEvent(
+          selectedClubEvent,
+          scheduleForBusy,
+          outlookForBusy,
+          range.rangeStart,
+          range.rangeEnd
+        )
+      : [];
 
   function onSelectSlot(info: DateSelectArg) {
     const dayName = info.start
@@ -271,7 +360,19 @@ export function StudentCalendarView() {
   function onEventClick(arg: EventClickArg) {
     const kind = String(arg.event.extendedProps.kind || "");
     if (kind === "club") {
-      setSelected({ kind: "club", id: String(arg.event.extendedProps.eventId) });
+      const eventId = String(arg.event.extendedProps.eventId);
+      const ev = (calendarQuery.data?.clubEvents ?? []).find((e) => e.id === eventId) as ClubEvent | undefined;
+      if (ev) {
+        const hits = overlapsForClubEvent(ev, scheduleForBusy, outlookForBusy, range.rangeStart, range.rangeEnd);
+        if (hits.length > 0) {
+          toast.warning("This club event overlaps your schedule or Outlook calendar.");
+        }
+      }
+      setSelected({ kind: "club", id: eventId });
+      return;
+    }
+    if (kind === "outlook") {
+      setSelected({ kind: "outlook", id: String(arg.event.extendedProps.outlookId) });
       return;
     }
     const id = String(arg.event.id);
@@ -286,14 +387,54 @@ export function StudentCalendarView() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>My Calendar</CardTitle>
-            <CardDescription>Classes, custom recurring tasks, and joined club events in one place.</CardDescription>
+            <CardDescription>
+              Classes, custom items, joined club events, and optionally your Microsoft Outlook calendar together.
+            </CardDescription>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-[#1D4ED8]" aria-hidden />
+                Schedule
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-[#2563EB]" aria-hidden />
+                Club events
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-3 rounded-sm bg-[#64748B]" aria-hidden />
+                Outlook
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <ScheduleUploadDialog />
-            <Button onClick={() => setCreateOpen(true)} className="gap-2">
-              <CalendarPlus className="h-4 w-4" />
-              Add recurring item
-            </Button>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <div className="flex flex-wrap gap-2">
+              <ScheduleUploadDialog />
+              <Button onClick={() => setCreateOpen(true)} className="gap-2">
+                <CalendarPlus className="h-4 w-4" />
+                Add recurring item
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {msStatusQuery.data?.connected ? (
+                <>
+                  <p className="w-full text-right text-xs text-muted-foreground sm:w-auto">
+                    Outlook: {msStatusQuery.data.accountEmail ?? "Connected"}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={disconnectMsMutation.isPending}
+                    onClick={() => disconnectMsMutation.mutate()}
+                  >
+                    Disconnect Outlook
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <a href="/api/integrations/microsoft/start">Connect Microsoft calendar</a>
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -331,6 +472,8 @@ export function StudentCalendarView() {
           </div>
         </CardContent>
       </Card>
+
+      <CalendarConflictsPanel rows={conflictRows} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
@@ -403,8 +546,31 @@ export function StudentCalendarView() {
       <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Event actions</DialogTitle>
+            <DialogTitle>
+              {selected?.kind === "club"
+                ? "Club event"
+                : selected?.kind === "outlook"
+                  ? "Outlook event"
+                  : "Schedule item"}
+            </DialogTitle>
           </DialogHeader>
+
+          {selected?.kind === "outlook" && selectedOutlookEvent ? (
+            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <p>
+                <span className="font-semibold">Title:</span> {selectedOutlookEvent.title}
+              </p>
+              <p>
+                <span className="font-semibold">Time:</span>{" "}
+                {selectedOutlookEvent.isAllDay
+                  ? `All day (${selectedOutlookEvent.allDayStartDate ?? ""})`
+                  : `${new Date(selectedOutlookEvent.startsAt).toLocaleString()} – ${new Date(selectedOutlookEvent.endsAt).toLocaleString()}`}
+              </p>
+              <p className="text-muted-foreground">
+                This event is read-only and comes from your Microsoft calendar.
+              </p>
+            </div>
+          ) : null}
 
           {selected?.kind === "schedule" ? (
             <div className="space-y-3">
@@ -465,12 +631,26 @@ export function StudentCalendarView() {
                     {selectedClubEvent.capacity ? ` / ${selectedClubEvent.capacity}` : ""}
                   </p>
                   <p><span className="font-semibold">Your status:</span> {prettyViewerStatus(selectedClubEvent.viewerStatus)}</p>
+                  {selectedClubConflicts.length > 0 ? (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-950 dark:text-amber-100">
+                      <p className="font-semibold">Scheduling overlap</p>
+                      <ul className="mt-1 list-inside list-disc">
+                        {selectedClubConflicts.map((c, i) => (
+                          <li key={i}>
+                            {c.source === "outlook" ? "Outlook" : "Schedule"}: {c.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               )}
 
-              {selectedClubEvent?.viewerStatus ? (
+              {selectedClubEvent?.viewerStatus === "CHECKED_IN" ? (
+                <p className="text-sm text-muted-foreground">You are checked in for this event.</p>
+              ) : selectedClubEvent?.viewerStatus ? (
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   disabled={cancelRsvpMutation.isPending}
                   onClick={() => {
                     const id = selected?.id;
@@ -478,7 +658,7 @@ export function StudentCalendarView() {
                     cancelRsvpMutation.mutate({ eventId: id });
                   }}
                 >
-                  Reject RSVP
+                  Can&apos;t go
                 </Button>
               ) : (
                 <Button
@@ -489,7 +669,7 @@ export function StudentCalendarView() {
                     rsvpMutation.mutate({ eventId: id });
                   }}
                 >
-                  RSVP
+                  Going
                 </Button>
               )}
             </>
