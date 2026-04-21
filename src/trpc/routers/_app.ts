@@ -13,6 +13,7 @@ import { postsRouter } from '../../modules/posts/server/router';
 import { calendarRouter } from '../../modules/calendar/server/router';
 import { scheduleInferenceRouter } from '../../modules/schedule-inference/server/router';
 import { universityAdminRouter } from '../../modules/university-admin/server/router';
+import { eventGeneratorRouter } from '../../modules/event-generator/server/router';
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -29,6 +30,7 @@ export const appRouter = createTRPCRouter({
   calendar: calendarRouter,
   scheduleInference: scheduleInferenceRouter,
   universityAdmin: universityAdminRouter,
+  eventGenerator: eventGeneratorRouter,
 });
 
 export type AppRouter = typeof appRouter;

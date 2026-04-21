@@ -41,6 +41,7 @@ https://yourdomain.com/auth
    - Ensure "uploads" bucket exists
    - Set bucket to public
    - Configure RLS policies to allow authenticated users to upload to their own folder
+   - For server-side Inngest uploads (event poster generation), set a service-role key in server env (`SUPABASE_SERVICE_ROLE_KEY` preferred; aliases supported: `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_SERVICE_ROLE`) so background jobs can upload regardless of end-user session state
 
 ## How Email Verification Works
 
