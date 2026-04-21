@@ -76,18 +76,13 @@ export default function PostsTab({ posts, image }: Props) {
   return (
     <div className="space-y-3 p-4">
       {image && (
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-hidden rounded-lg border bg-muted/30">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={image.supabaseUrl}
             alt="Event poster"
-            className="w-full object-cover"
+            className="mx-auto w-full max-h-[70vh] object-contain"
           />
-          {image.prompt && (
-            <p className="px-3 py-2 text-xs text-muted-foreground">
-              {image.prompt}
-            </p>
-          )}
         </div>
       )}
 

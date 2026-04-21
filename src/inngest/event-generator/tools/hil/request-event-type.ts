@@ -13,7 +13,7 @@ export const request_event_type = createTool<AgentState>({
     const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("request_event_type:explain", () => publishers.publishChunk(explanation));
 
     await step!.run("set-awaiting-type", async () => {
       await prisma.project.update({
@@ -22,11 +22,13 @@ export const request_event_type = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "awaiting_event_type", clubId, projectId },
-    });
+    await step!.run("request_event_type:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_event_type", clubId, projectId },
+      })
+    );
 
     const response = await step!.waitForEvent("wait-for-type", {
       event: "event-generator/type-response",
@@ -41,11 +43,13 @@ export const request_event_type = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "hil_completed", hilType: "event_type", clubId, projectId },
-    });
+    await step!.run("request_event_type:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "event_type", clubId, projectId },
+      })
+    );
 
     return response?.data.type ?? "No response";
   },

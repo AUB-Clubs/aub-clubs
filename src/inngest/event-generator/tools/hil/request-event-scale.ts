@@ -13,7 +13,7 @@ export const request_event_scale = createTool<AgentState>({
     const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("request_event_scale:explain", () => publishers.publishChunk(explanation));
 
     await step!.run("set-awaiting-scale", async () => {
       await prisma.project.update({
@@ -22,11 +22,13 @@ export const request_event_scale = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "awaiting_event_scale", clubId, projectId },
-    });
+    await step!.run("request_event_scale:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_event_scale", clubId, projectId },
+      })
+    );
 
     const response = await step!.waitForEvent("wait-for-scale", {
       event: "event-generator/scale-response",
@@ -41,11 +43,13 @@ export const request_event_scale = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "hil_completed", hilType: "event_scale", clubId, projectId },
-    });
+    await step!.run("request_event_scale:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "event_scale", clubId, projectId },
+      })
+    );
 
     return response?.data.scale ?? "No response";
   },

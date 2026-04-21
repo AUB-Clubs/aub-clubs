@@ -11,21 +11,23 @@ export const search_in_event_report = createTool<AgentState>({
     explanation: z.string(),
     search_query: z.string().describe("Exact text to search for in the report."),
   }),
-  handler: async ({ explanation, search_query }, { network }) => {
+  handler: async ({ explanation, search_query }, { step, network }) => {
     const { publishers } = network!.state.data;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("search_in_event_report:explain", () => publishers.publishChunk(explanation));
 
-    const report = network!.state.data.report;
-    if (!report) return "No event report available to search.";
+    return await step!.run("search_in_event_report", async () => {
+      const report = network!.state.data.report;
+      if (!report) return "No event report available to search.";
 
-    const index = report.indexOf(search_query);
-    if (index === -1) return `No match found for: "${search_query}"`;
+      const index = report.indexOf(search_query);
+      if (index === -1) return `No match found for: "${search_query}"`;
 
-    const start = Math.max(0, index - CONTEXT_CHARS);
-    const end = Math.min(report.length, index + search_query.length + CONTEXT_CHARS);
-    const excerpt = report.slice(start, end);
+      const start = Math.max(0, index - CONTEXT_CHARS);
+      const end = Math.min(report.length, index + search_query.length + CONTEXT_CHARS);
+      const excerpt = report.slice(start, end);
 
-    return `Match found at character ${index}:\n\n...${excerpt}...`;
+      return `Match found at character ${index}:\n\n...${excerpt}...`;
+    });
   },
 });

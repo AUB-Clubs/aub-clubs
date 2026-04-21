@@ -5,7 +5,6 @@ import { createPublishers, type PublishFn } from "./publishers";
 import { getMainAgentPrompt } from "./prompts/main-agent";
 import { loadConversationHistory } from "./history";
 import { createEventGeneratorAgent } from "./agent";
-import { lastAssistantTextMessageContent } from "../utils";
 import type { AgentState } from "./types";
 
 export const eventGeneratorFunction = inngest.createFunction(
@@ -154,17 +153,21 @@ export const eventGeneratorFunction = inngest.createFunction(
     });
 
     // ── 5. Publish fragment_started ───────────────────────────────────────────
+    // Every publish is wrapped in its own step.run so it runs inside a step
+    // context (either the tool's parent step or a dedicated one here).
     const realtimeChannel = `club:${clubId}:project:${projectId}`;
-    await publish({
-      channel: realtimeChannel,
-      topic: "ai",
-      data: {
-        type: "fragment_started",
-        fragmentId: fragment.id,
-        clubId,
-        projectId,
-      },
-    });
+    await step.run("publish:fragment-started", () =>
+      publish({
+        channel: realtimeChannel,
+        topic: "ai",
+        data: {
+          type: "fragment_started",
+          fragmentId: fragment.id,
+          clubId,
+          projectId,
+        },
+      })
+    );
 
     // ── 6. Build publishers + initial state ──────────────────────────────────
     const publishFn: PublishFn = (opts) => publish(opts);
@@ -248,15 +251,11 @@ export const eventGeneratorFunction = inngest.createFunction(
       },
     });
 
-    const result = await network.run(value, { state });
+    await network.run(value, { state });
 
     // ── 8. Mark fragment completed + update message content ───────────────────
     await step.run("complete-fragment", async () => {
-      const summary = lastAssistantTextMessageContent(result) ?? "";
-      const cleanSummary = summary
-        .replaceAll("<task_summary>", "")
-        .replaceAll("</task_summary>", "")
-        .trim();
+      const cleanSummary = network.state.data.summary.trim();
 
       await prisma.fragment.update({
         where: { id: fragment.id },
@@ -272,16 +271,18 @@ export const eventGeneratorFunction = inngest.createFunction(
     });
 
     // ── 9. Publish fragment_completed ─────────────────────────────────────────
-    await publish({
-      channel: realtimeChannel,
-      topic: "ai",
-      data: {
-        type: "fragment_completed",
-        fragmentId: fragment.id,
-        clubId,
-        projectId,
-      },
-    });
+    await step.run("publish:fragment-completed", () =>
+      publish({
+        channel: realtimeChannel,
+        topic: "ai",
+        data: {
+          type: "fragment_completed",
+          fragmentId: fragment.id,
+          clubId,
+          projectId,
+        },
+      })
+    );
 
     return { fragmentId: fragment.id };
   }

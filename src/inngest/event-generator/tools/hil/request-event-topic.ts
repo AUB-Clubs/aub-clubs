@@ -13,7 +13,7 @@ export const request_event_topic = createTool<AgentState>({
     const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("request_event_topic:explain", () => publishers.publishChunk(explanation));
 
     await step!.run("set-awaiting-topic", async () => {
       await prisma.project.update({
@@ -22,11 +22,13 @@ export const request_event_topic = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "awaiting_event_topic", clubId, projectId },
-    });
+    await step!.run("request_event_topic:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_event_topic", clubId, projectId },
+      })
+    );
 
     const response = await step!.waitForEvent("wait-for-topic", {
       event: "event-generator/topic-response",
@@ -41,11 +43,13 @@ export const request_event_topic = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "hil_completed", hilType: "event_topic", clubId, projectId },
-    });
+    await step!.run("request_event_topic:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "event_topic", clubId, projectId },
+      })
+    );
 
     return response?.data.topic ?? "No response";
   },

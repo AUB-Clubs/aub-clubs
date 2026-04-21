@@ -15,28 +15,30 @@ export const log_selected_idea = createTool<AgentState>({
       .string()
       .describe("The exact idea selected by the user (or user's custom idea)."),
   }),
-  handler: async ({ explanation, selected_idea }, { network }) => {
+  handler: async ({ explanation, selected_idea }, { step, network }) => {
     const state = network!.state.data as AgentState;
     const { fragmentId, publishers } = state;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("log_selected_idea:explain", () => publishers.publishChunk(explanation));
 
-    const selectedIdea = selected_idea.trim();
-    if (!selectedIdea) {
-      return "No selected idea provided to log.";
-    }
+    return await step!.run("log_selected_idea", async () => {
+      const selectedIdea = selected_idea.trim();
+      if (!selectedIdea) {
+        return "No selected idea provided to log.";
+      }
 
-    state.selectedIdea = selectedIdea;
+      state.selectedIdea = selectedIdea;
 
-    if (fragmentId) {
-      await prisma.eventDetails.upsert({
-        where: { fragmentId },
-        create: { fragmentId, selectedIdea },
-        update: { selectedIdea },
-      });
-      await publishers.publishFragmentUpdate("event_details", { selectedIdea });
-    }
+      if (fragmentId) {
+        await prisma.eventDetails.upsert({
+          where: { fragmentId },
+          create: { fragmentId, selectedIdea },
+          update: { selectedIdea },
+        });
+        await publishers.publishFragmentUpdate("event_details", { selectedIdea });
+      }
 
-    return `Logged selected idea: ${selectedIdea}`;
+      return `Logged selected idea: ${selectedIdea}`;
+    });
   },
 });

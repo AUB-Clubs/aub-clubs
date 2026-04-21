@@ -28,9 +28,17 @@ export type FragmentUpdateType =
   | "image";
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
-// Called once in the main Inngest function, receives the realtime publish fn
-// and the messageId of the current assistant message (for chunk ordering).
-// Returns a Publishers object that gets stored and used by all tools.
+// Called once in the main Inngest function. Returns a Publishers object used
+// by all tools.
+//
+// Step wrapping policy:
+//   - Publisher methods DO NOT call step.run themselves. Each tool handler
+//     already wraps its body in step.run(...), so publish calls made from
+//     inside a handler are covered by that parent step and do not need (and
+//     must not add) their own step wrapping — otherwise we nest steps.
+//   - The MessageChunk DB insert inside publishChunk is a plain async prisma
+//     call, NOT a step. It's fine to await directly because it runs inside
+//     the parent step.run of the calling tool.
 
 export function createPublishers(opts: {
   publish: PublishFn;
@@ -40,7 +48,6 @@ export function createPublishers(opts: {
 }): Publishers {
   const { publish, clubId, projectId, messageId } = opts;
 
-  // Canonical channel: scoped to club → project so subscribers can filter at any level
   const channel = `club:${clubId}:project:${projectId}`;
 
   const publishChunk: Publishers["publishChunk"] = async (text) => {
@@ -70,7 +77,13 @@ export function createPublishers(opts: {
     await publish({
       channel,
       topic: "ai",
-      data: { type: "fragment_update", clubId, projectId, updateType: type, payload: data },
+      data: {
+        type: "fragment_update",
+        clubId,
+        projectId,
+        updateType: type,
+        payload: data,
+      },
     });
   };
 

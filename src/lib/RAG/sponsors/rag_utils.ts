@@ -7,7 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function findNearestMatchSponsors(embedding: number[]): Promise<string> {
-  const data = await matchSponsorDocuments(embedding, 0.75, 10);
+  // Permissive floor — see speakers/rag_utils.ts for rationale.
+  const data = await matchSponsorDocuments(embedding, 0.2, 10);
   if (!data || data.length === 0) return "";
   return data.map((obj) => obj.content).join("\n");
 }

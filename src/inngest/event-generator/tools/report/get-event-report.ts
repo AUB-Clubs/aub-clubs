@@ -9,32 +9,34 @@ export const get_event_report = createTool<AgentState>({
   parameters: z.object({
     explanation: z.string(),
   }),
-  handler: async ({ explanation }, { network }) => {
+  handler: async ({ explanation }, { step, network }) => {
     const { projectId, publishers } = network!.state.data;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("get_event_report:explain", () => publishers.publishChunk(explanation));
 
-    // State-first
-    if (network!.state.data.report) {
-      return network!.state.data.report;
-    }
+    return await step!.run("get_event_report", async () => {
+      // State-first
+      if (network!.state.data.report) {
+        return network!.state.data.report;
+      }
 
-    // DB fallback: latest completed fragment
-    const prevFragment = await prisma.fragment.findFirst({
-      where: {
-        message: { projectId },
-        completedAt: { not: null },
-      },
-      orderBy: { createdAt: "desc" },
-      include: { eventReport: true },
+      // DB fallback: latest completed fragment
+      const prevFragment = await prisma.fragment.findFirst({
+        where: {
+          message: { projectId },
+          completedAt: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+        include: { eventReport: true },
+      });
+
+      const markdown = prevFragment?.eventReport?.markdown ?? null;
+
+      if (markdown) {
+        network!.state.data.report = markdown;
+      }
+
+      return markdown ?? "No event report found.";
     });
-
-    const markdown = prevFragment?.eventReport?.markdown ?? null;
-
-    if (markdown) {
-      network!.state.data.report = markdown;
-    }
-
-    return markdown ?? "No event report found.";
   },
 });
