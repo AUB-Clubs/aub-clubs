@@ -1,5 +1,5 @@
-import ClubVerificationView from '@/modules/admin/ui/admin';
+import { redirect } from 'next/navigation';
 
 export default function AdminClubsPage() {
-  return <ClubVerificationView />;
+  redirect('/admin');
 }
