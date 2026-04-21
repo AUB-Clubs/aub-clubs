@@ -1,10 +1,10 @@
 import { expect, test } from "./fixtures";
 
 test.describe("AUB Clubs smoke", () => {
-  test("redirects root path to auth", async ({ page }) => {
+  test("redirects root path to discover in bypass mode", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(/\/auth/);
-    await expect(page.getByRole("heading", { name: "Welcome to AUB Clubs" })).toBeVisible();
+    await expect(page).toHaveURL(/\/discover/);
+    await expect(page.getByRole("heading", { name: "Discover" })).toBeVisible();
   });
 
   test("auth page loads", async ({ page }) => {
@@ -22,7 +22,7 @@ test.describe("AUB Clubs smoke", () => {
     await page.goto("/clubs");
     await expect(page.getByRole("heading", { name: "Available Clubs" })).toBeVisible();
 
-    const firstClubLink = page.locator('a[href^="/clubs/"][href!="/clubs"]');
+    const firstClubLink = page.locator('a[href^="/clubs/"]:not([href="/clubs"])');
     await expect(firstClubLink.first()).toBeVisible();
   });
 
@@ -33,7 +33,7 @@ test.describe("AUB Clubs smoke", () => {
 
   test("club details page loads from clubs list", async ({ page }) => {
     await page.goto("/clubs");
-    const firstClubLink = page.locator('a[href^="/clubs/"][href!="/clubs"]').first();
+    const firstClubLink = page.locator('a[href^="/clubs/"]:not([href="/clubs"])').first();
     await firstClubLink.click();
     await expect(page).toHaveURL(/\/clubs\/[a-z0-9-]+/i);
     await expect(page.getByRole("button", { name: "About" })).toBeVisible();
