@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getBypassUserIdFromRequest } from "@/modules/auth/server/utils/e2e-auth-bypass";
 
 /**
  * Next.js Middleware for Route Protection
@@ -15,6 +16,8 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const bypassUserId = getBypassUserIdFromRequest(request);
 
   // Create a response that we can modify
   let response = NextResponse.next({
@@ -79,6 +82,10 @@ export async function middleware(request: NextRequest) {
   // ─────────────────────────────────────────────────────────────────────
   // PROTECTED ROUTES: Require authentication
   // ─────────────────────────────────────────────────────────────────────
+
+  if (bypassUserId) {
+    return response;
+  }
 
   // Not authenticated → redirect to /auth
   if (!user) {

@@ -2,6 +2,8 @@ import { prisma } from '../src/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 
+const E2E_USER_ID = '00000000-0000-4000-8000-000000000001';
+
 async function main() {
   console.log('Start seeding ...');
 
@@ -29,6 +31,32 @@ async function main() {
     clubs.push(club);
   }
   console.log(`Created ${clubs.length} clubs.`);
+
+  await prisma.user.upsert({
+    where: { id: E2E_USER_ID },
+    update: {
+      email: 'e2e-user@aub.test',
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: 'E2E',
+      lastName: 'User',
+      aubnetId: 99999999,
+      major: 'Computer Science',
+      year: 4,
+    },
+    create: {
+      id: E2E_USER_ID,
+      email: 'e2e-user@aub.test',
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: 'E2E',
+      lastName: 'User',
+      aubnetId: 99999999,
+      major: 'Computer Science',
+      year: 4,
+    },
+  });
+  console.log('E2E test user ensured.');
 
   console.log('Seeding finished.');
 }
