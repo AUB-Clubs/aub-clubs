@@ -5,6 +5,11 @@ const SUPABASE_URL =
 const SUPABASE_PUBLISHABLE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_SECRET_KEY ??
+  process.env.SUPABASE_SERVICE_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE
 
 export const SUPABASE_UPLOADS_BUCKET = "uploads"
 
@@ -16,6 +21,7 @@ export type UploadFileToSupabaseOptions = {
   bucket?: string
   cacheControl?: string
   upsert?: boolean
+  useServiceRole?: boolean
   supabaseClient?: SupabaseClient
 }
 
@@ -26,6 +32,7 @@ export type UploadFileToSupabaseResult = {
 }
 
 let supabaseClient: SupabaseClient | null = null
+let supabaseServiceClient: SupabaseClient | null = null
 
 function getSupabaseClient() {
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
@@ -39,6 +46,25 @@ function getSupabaseClient() {
   }
 
   return supabaseClient
+}
+
+function getSupabaseServiceClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      "Missing Supabase service role configuration for server uploads. Set NEXT_PUBLIC_SUPABASE_API_URL and one of: SUPABASE_SERVICE_ROLE_KEY, SUPABASE_SECRET_KEY, SUPABASE_SERVICE_KEY, SUPABASE_SERVICE_ROLE",
+    )
+  }
+
+  if (!supabaseServiceClient) {
+    supabaseServiceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  }
+
+  return supabaseServiceClient
 }
 
 function sanitizePathPart(value: string, fallback: string) {
@@ -85,12 +111,17 @@ export async function uploadFileToSupabase(
     bucket = SUPABASE_UPLOADS_BUCKET,
     cacheControl = "3600",
     upsert = false,
+    useServiceRole = false,
     supabaseClient: injectedClient,
   } = options
 
   const fileName = resolveFileName(file, options.fileName)
   const path = buildUserScopedUploadPath({ userId, fileName, folder })
-  const client = injectedClient ?? getSupabaseClient()
+  const client = injectedClient
+    ? injectedClient
+    : useServiceRole
+      ? getSupabaseServiceClient()
+      : getSupabaseClient()
   const contentType = file.type || undefined
 
   const { data: userAuth } = await client.auth.getUser()
