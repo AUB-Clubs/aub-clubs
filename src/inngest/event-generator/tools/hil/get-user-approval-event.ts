@@ -1,0 +1,59 @@
+import { createTool } from "@inngest/agent-kit";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import type { AgentState } from "../../types";
+
+export const get_user_approval_event = createTool<AgentState>({
+  name: "get_user_approval_event",
+  description: "Halts agent execution and waits for the user to approve or request edits to the event report.",
+  parameters: z.object({
+    explanation: z.string().describe("Brief message to the user requesting approval."),
+  }),
+  handler: async ({ explanation }, { step, network }) => {
+    const { clubId, projectId, publishers } = network!.state.data;
+    const channel = `club:${clubId}:project:${projectId}`;
+
+    await step!.run("get_user_approval_event:explain", () => publishers.publishChunk(explanation));
+
+    await step!.run("set-awaiting-event-approval", async () => {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { isAwaitingEventApproval: true },
+      });
+    });
+
+    await step!.run("get_user_approval_event:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_event_approval", clubId, projectId },
+      })
+    );
+
+    const response = await step!.waitForEvent("wait-for-event-approval", {
+      event: "event-generator/event-approval",
+      timeout: "30m",
+      if: `async.data.clubId == '${clubId}' && async.data.projectId == '${projectId}'`,
+    });
+
+    await step!.run("clear-awaiting-event-approval", async () => {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { isAwaitingEventApproval: false },
+      });
+    });
+
+    await step!.run("get_user_approval_event:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "event_approval", clubId, projectId },
+      })
+    );
+
+    const approved: boolean = response?.data.approved ?? false;
+    const editNotes: string = response?.data.editNotes ?? "";
+
+    return JSON.stringify({ approved, editNotes });
+  },
+});

@@ -64,6 +64,7 @@ import {
   Upload,
   Loader2,
   Save,
+  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from '@/lib/client-image-upload'
@@ -114,14 +115,15 @@ function formatDate(iso: string) {
 
 import { EventsSection } from '../components/AdminEventsSection'
 import { AnalyticsSection } from '../components/AdminAnalyticsSection'
+import { EventGeneratorSection } from '../components/AdminEventGeneratorSection'
 
 export interface AdminPanelProps {
   clubId: string
-  initialSection?: 'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null
+  initialSection?: 'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | 'event-generator' | null
 }
 
 export default function AdminPanel({ clubId, initialSection = null }: AdminPanelProps) {
-  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | null>(initialSection)
+  const [activeSection, setActiveSection] = useState<'members' | 'requests' | 'announcements' | 'events' | 'analytics' | 'profile' | 'event-generator' | null>(initialSection)
 
   // Auth check: only president / vice can access
   const membershipQuery = trpc.clubs.getMembership.useQuery(
@@ -567,7 +569,9 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
                           ? 'Analytics'
                           : activeSection === 'profile'
                             ? 'Club Profile'
-                            : 'Admin Panel'}
+                            : activeSection === 'event-generator'
+                              ? 'Event Generator'
+                              : 'Admin Panel'}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {activeSection
@@ -666,6 +670,25 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
             </button>
 
             <button
+              onClick={() => setActiveSection('event-generator')}
+              className="group text-left"
+            >
+              <Card className="h-full rounded-2xl border-0 bg-card/80 shadow-sm ring-1 ring-border/50 transition-all hover:shadow-md hover:ring-red-500/30 cursor-pointer">
+                <CardContent className="flex flex-col items-start gap-3 pt-6">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-red-500/10 transition-colors group-hover:bg-red-500/20">
+                    <Sparkles className="size-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">Event Generator</p>
+                    <p className="text-sm text-muted-foreground">
+                      AI-powered event planning assistant
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
+
+            <button
               onClick={() => setActiveSection('analytics')}
               className="group text-left"
             >
@@ -717,6 +740,9 @@ function ClubProfileSection({ clubId }: { clubId: string }) {
         )}
         {activeSection === 'events' && (
           <EventsSection clubId={clubId} />
+        )}
+        {activeSection === 'event-generator' && (
+          <EventGeneratorSection clubId={clubId} />
         )}
         {activeSection === 'analytics' && (
           <AnalyticsSection clubId={clubId} />
