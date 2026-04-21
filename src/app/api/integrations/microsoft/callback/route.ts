@@ -4,6 +4,7 @@ import { createClient } from "@/modules/auth/server/utils/supabase-server";
 import {
   exchangeAuthorizationCode,
   fetchGraphMe,
+  type MicrosoftProfile,
   persistTokensForUser,
 } from "@/modules/calendar/server/microsoft-oauth";
 
@@ -52,10 +53,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const tokens = await exchangeAuthorizationCode(code, verifier);
-    const profile = await fetchGraphMe(tokens.access_token);
+    let profile: MicrosoftProfile | null = null;
+    try {
+      profile = await fetchGraphMe(tokens.access_token);
+    } catch (error) {
+      console.error("Microsoft Graph /me lookup failed", error);
+    }
     await persistTokensForUser({ userId: user.id, tokens, profile });
     return clearPkce(NextResponse.redirect(new URL("/calendar?ms_connected=1", origin)));
-  } catch {
-    return clearPkce(NextResponse.redirect(new URL("/calendar?ms_error=token", origin)));
+  } catch (error) {
+    console.error("Microsoft callback failed", error);
+    const message =
+      error instanceof Error ? error.message : "Microsoft OAuth failed";
+    const msg = encodeURIComponent(message.slice(0, 300));
+    return clearPkce(NextResponse.redirect(new URL(`/calendar?ms_error=${msg}`, origin)));
   }
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "./token-crypto";
 
 const TOKEN_PATH = "/oauth2/v2.0/token";
+export const MICROSOFT_OAUTH_SCOPES = "offline_access openid profile User.Read Calendars.Read";
 
 function tenantSegment(): string {
   return process.env.MICROSOFT_TENANT ?? process.env.MICROSOFT_TENANT_ID ?? "common";
@@ -39,6 +40,7 @@ export async function exchangeAuthorizationCode(
     code,
     redirect_uri: redirectUri,
     code_verifier: codeVerifier,
+    scope: MICROSOFT_OAUTH_SCOPES,
   });
 
   const res = await fetch(tokenUrl(), {
@@ -101,31 +103,35 @@ export async function fetchGraphMe(accessToken: string): Promise<MicrosoftProfil
 export async function persistTokensForUser(params: {
   userId: string;
   tokens: TokenResponse;
-  profile: MicrosoftProfile;
+  profile?: MicrosoftProfile | null;
 }): Promise<void> {
   const { tokens, profile, userId } = params;
-
-  if (!tokens.refresh_token) {
-    throw new Error("Microsoft did not return a refresh token; ensure offline_access scope is granted");
+  const existingLink = await prisma.userMicrosoftCalendarLink.findUnique({
+    where: { userId },
+    select: { encryptedRefreshToken: true },
+  });
+  const encryptedRefresh = tokens.refresh_token
+    ? encryptSecret(tokens.refresh_token)
+    : existingLink?.encryptedRefreshToken;
+  if (!encryptedRefresh) {
+    throw new Error("Microsoft did not return a refresh token. Reconnect and accept consent.");
   }
-
-  const encryptedRefresh = encryptSecret(tokens.refresh_token);
   const expiresAt = new Date(Date.now() + Math.max(0, tokens.expires_in - 60) * 1000);
-  const scopes = tokens.scope ?? "offline_access openid profile Calendars.Read";
+  const scopes = tokens.scope ?? MICROSOFT_OAUTH_SCOPES;
 
   await prisma.userMicrosoftCalendarLink.upsert({
     where: { userId },
     create: {
       userId,
-      msUserId: profile.id,
-      accountEmail: profile.mail ?? profile.userPrincipalName ?? null,
+      msUserId: profile?.id ?? null,
+      accountEmail: profile?.mail ?? profile?.userPrincipalName ?? null,
       encryptedRefreshToken: encryptedRefresh,
       tokenExpiresAt: expiresAt,
       scopes,
     },
     update: {
-      msUserId: profile.id,
-      accountEmail: profile.mail ?? profile.userPrincipalName ?? null,
+      msUserId: profile?.id ?? null,
+      accountEmail: profile?.mail ?? profile?.userPrincipalName ?? null,
       encryptedRefreshToken: encryptedRefresh,
       tokenExpiresAt: expiresAt,
       scopes,

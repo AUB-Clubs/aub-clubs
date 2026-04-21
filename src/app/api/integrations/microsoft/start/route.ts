@@ -2,6 +2,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/modules/auth/server/utils/supabase-server";
+import { MICROSOFT_OAUTH_SCOPES } from "@/modules/calendar/server/microsoft-oauth";
 
 function appOrigin(): string {
   const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
@@ -50,10 +51,11 @@ export async function GET() {
       response_type: "code",
       redirect_uri: redirectUri,
       response_mode: "query",
-      scope: "offline_access openid profile Calendars.Read",
+      scope: MICROSOFT_OAUTH_SCOPES,
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
+      prompt: "consent",
     });
 
     const authorizeUrl = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${params.toString()}`;
