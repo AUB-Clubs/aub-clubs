@@ -1,8 +1,8 @@
 'use client'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DiscoverFeedTab } from '@/modules/students/ui/components/DiscoverFeedTab'
-import { TrendingFeedTab } from '@/modules/students/ui/components/TrendingFeedTab'
+import { DiscoverFeedTab } from '@/modules/Students/ui/components/DiscoverFeedTab'
+import { TrendingFeedTab } from '@/modules/Students/ui/components/TrendingFeedTab'
 
 export function DiscoverPage() {
   return (
