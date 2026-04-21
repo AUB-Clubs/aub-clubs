@@ -72,6 +72,33 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## 5. Run E2E tests (Playwright)
+
+Install Playwright browsers once:
+
+```bash
+npx playwright install --with-deps chromium
+```
+
+Set the following variables in `.env` for local E2E runs:
+
+```env
+E2E_TEST_MODE=true
+E2E_AUTH_SECRET=local-e2e-secret
+E2E_AUTH_USER_ID=00000000-0000-4000-8000-000000000001
+```
+
+Then run:
+
+```bash
+npm run generate
+npx prisma migrate deploy
+npm run seed
+npm run e2e
+```
+
+Security note: the auth bypass is only active when `E2E_TEST_MODE=true` and the secret cookie/header matches `E2E_AUTH_SECRET`.
+
 ---
 
 ## Using the new APIs (profile & For You feed)

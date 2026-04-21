@@ -11,6 +11,9 @@
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
     "seed": "npx tsx prisma/seed.ts",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:headed": "playwright test --headed",
     "studio": "npx prisma studio",
     "ai": "npx -y inngest-cli@1.15.0 dev -u http://localhost:3000/api/inngest",
     "rag:hydrate:buildings": "tsx src/lib/RAG/buildings/index.ts",
@@ -103,6 +106,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.30",
     "@types/pg": "^8.16.0",
