@@ -11,6 +11,11 @@ datasource db {
 // Enums
 // --------------------
 
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
 enum ClubRole {
   MEMBER
   BOARD // Generic for logistics, treasurer, etc. (use customTitle for specifics)
@@ -152,10 +157,11 @@ model Club {
   types ClubType[] // Cloud Native PG handles scalar arrays natively
 
   // Relations
-  memberships Membership[]
-  posts       Post[]
-  events      ClubEvent[]
-  scheduledEvents Event[]
+  memberships     Membership[]
+  posts           Post[]
+  projects        Project[]
+  clubEvents      ClubEvent[]
+  events          Event[]
 
   @@map("clubs")
 }
@@ -367,6 +373,214 @@ model EventRegistration {
   @@map("event_registrations")
 }
 
+model Message {
+  id        String      @id @default(uuid())
+  projectId String      @map("project_id")
+  role      MessageRole
+  content   String?     @db.Text
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  project  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks   MessageChunk[]
+  fragment Fragment?
+
+  @@index([projectId, createdAt(sort: Asc)])
+  @@map("messages")
+}
+
+model MessageChunk {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  response  String   @db.Text
+  sequence  Int      @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, sequence(sort: Asc)])
+  @@map("message_chunks")
+}
+
+model Fragment {
+  id          String    @id @default(uuid())
+  messageId   String    @unique @map("message_id")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  message        Message         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  eventDetails   EventDetails?
+  eventReport    EventReport?
+  eventSpeakers  EventSpeaker[]
+  eventSponsors  EventSponsor[]
+  eventBuildings EventBuilding[]
+  eventEmails    EventEmail[]
+  eventPosts     EventPost[]
+  eventImage     EventImage?
+
+  @@index([messageId])
+  @@map("fragments")
+}
+
+model EventDetails {
+  id           String   @id @default(uuid())
+  fragmentId   String   @unique @map("fragment_id")
+  scale        String?
+  type         String?
+  topic        String?
+  selectedIdea String?  @map("selected_idea") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@map("event_details")
+}
+
+model EventReport {
+  id         String   @id @default(uuid())
+  fragmentId String   @unique @map("fragment_id")
+  markdown   String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@map("event_reports")
+}
+
+model EventSpeaker {
+  id           String   @id @default(uuid())
+  fragmentId   String   @map("fragment_id")
+  name         String
+  title        String
+  sessionFocus String   @map("session_focus") @db.Text
+  why          String   @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId])
+  @@map("event_speakers")
+}
+
+model EventSponsor {
+  id                   String   @id @default(uuid())
+  fragmentId           String   @map("fragment_id")
+  name                 String
+  type                 String
+  specificContribution String   @map("specific_contribution") @db.Text
+  why                  String   @db.Text
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId])
+  @@map("event_sponsors")
+}
+
+model EventBuilding {
+  id         String   @id @default(uuid())
+  fragmentId String   @map("fragment_id")
+  name       String
+  why        String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId])
+  @@map("event_buildings")
+}
+
+model EventEmail {
+  id         String   @id @default(uuid())
+  fragmentId String   @map("fragment_id")
+  name       String
+  content    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId])
+  @@map("event_emails")
+}
+
+model EventPost {
+  id         String   @id @default(uuid())
+  fragmentId String   @map("fragment_id")
+  platform   String
+  content    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@index([fragmentId, platform])
+  @@map("event_posts")
+}
+
+model EventImage {
+  id          String   @id @default(uuid())
+  fragmentId  String   @unique @map("fragment_id")
+  supabaseUrl String   @map("supabase_url")
+  prompt      String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  fragment Fragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@map("event_images")
+}
+
+model BuildingDocument {
+  id        String                 @id @default(uuid())
+  content   String?                @db.Text
+  embedding Unsupported("vector")?
+  metadata  Json?
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("building_documents")
+}
+
+model SponsorDocument {
+  id        String                 @id @default(uuid())
+  content   String?                @db.Text
+  embedding Unsupported("vector")?
+  metadata  Json?
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("sponsor_documents")
+}
+
+model SpeakerDocument {
+  id        String                 @id @default(uuid())
+  content   String?                @db.Text
+  embedding Unsupported("vector")?
+  metadata  Json?
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("speaker_documents")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  clubId    String   @map("club_id")
+  name      String
+
+  isAwaitingEventScale    Boolean @default(false) @map("is_awaiting_event_scale")
+  isAwaitingEventType     Boolean @default(false) @map("is_awaiting_event_type")
+  isAwaitingEventTopic    Boolean @default(false) @map("is_awaiting_event_topic")
+  isAwaitingIdeaSelection Boolean @default(false) @map("is_awaiting_idea_selection")
+  isAwaitingEventApproval Boolean @default(false) @map("is_awaiting_event_approval")
+  isAwaitingEmailApproval Boolean @default(false) @map("is_awaiting_email_approval")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages Message[]
+  club     Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}
 model Comment {
   id        String   @id @default(uuid())
   postId    String   @map("post_id")

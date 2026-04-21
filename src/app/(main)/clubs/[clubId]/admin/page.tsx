@@ -6,7 +6,7 @@ interface PageProps {
   searchParams: Promise<{ section?: string }>
 }
 
-const ALLOWED_SECTIONS = ['members', 'requests', 'announcements', 'events', 'analytics', 'profile'] as const
+const ALLOWED_SECTIONS = ['members', 'requests', 'announcements', 'events', 'analytics', 'profile', 'event-generator'] as const
 type AdminSection = (typeof ALLOWED_SECTIONS)[number]
 
 function isAdminSection(value: string | undefined): value is AdminSection {
