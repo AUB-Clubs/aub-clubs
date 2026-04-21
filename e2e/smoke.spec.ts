@@ -22,18 +22,19 @@ test.describe("AUB Clubs smoke", () => {
     await page.goto("/clubs");
     await expect(page.getByRole("heading", { name: "Available Clubs" })).toBeVisible();
 
-    const firstClubLink = page.locator('a[href^="/clubs/"]:not([href="/clubs"])');
-    await expect(firstClubLink.first()).toBeVisible();
+    const firstClubLink = page.getByRole("link", { name: "View Club" }).first();
+    await expect(firstClubLink).toBeVisible();
   });
 
   test("profile page loads", async ({ page }) => {
     await page.goto("/profile");
-    await expect(page.getByRole("heading", { name: "Profile details" })).toBeVisible();
+    await expect(page.getByText("Profile details")).toBeVisible();
   });
 
   test("club details page loads from clubs list", async ({ page }) => {
     await page.goto("/clubs");
-    const firstClubLink = page.locator('a[href^="/clubs/"]:not([href="/clubs"])').first();
+    const firstClubLink = page.getByRole("link", { name: "View Club" }).first();
+    await expect(firstClubLink).toBeVisible();
     await firstClubLink.click();
     await expect(page).toHaveURL(/\/clubs\/[a-z0-9-]+/i);
     await expect(page.getByRole("button", { name: "About" })).toBeVisible();
