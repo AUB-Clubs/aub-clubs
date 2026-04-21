@@ -1,8 +1,28 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getBypassUserIdFromCookies } from "./e2e-auth-bypass";
 
 export async function createClient() {
   const cookieStore = await cookies();
+
+  const bypassUserId = getBypassUserIdFromCookies(cookieStore);
+  if (bypassUserId) {
+    return {
+      auth: {
+        async getUser() {
+          return {
+            data: {
+              user: {
+                id: bypassUserId,
+                email: "e2e-user@aub.test",
+              },
+            },
+            error: null,
+          };
+        },
+      },
+    } as const;
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_API_URL!,
