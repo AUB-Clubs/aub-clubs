@@ -57,85 +57,87 @@ export const generate_batch_posts_text = createTool<AgentState>({
     post_platform: z.enum(["instagram", "linkedin", "whatsapp", "forum", ""]).describe("Platform for post modification. Empty for new generation.").default(""),
     edits_requested: z.string().describe("Requested changes for modifications. Empty for new generation.").default(""),
   }),
-  handler: async ({ type, explanation, post_platform, edits_requested }, { network }) => {
+  handler: async ({ type, explanation, post_platform, edits_requested }, { step, network }) => {
     const state = network!.state.data as AgentState;
     const { fragmentId, projectId, publishers } = state;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("generate_batch_posts_text:explain", () => publishers.publishChunk(explanation));
 
-    const eventReport =
-      state.report ||
-      (await prisma.fragment.findFirst({
-        where: { message: { projectId }, completedAt: { not: null } },
-        orderBy: { createdAt: "desc" },
-        include: { eventReport: true },
-      }))?.eventReport?.markdown ||
-      "";
+    return await step!.run("generate_batch_posts_text", async () => {
+      const eventReport =
+        state.report ||
+        (await prisma.fragment.findFirst({
+          where: { message: { projectId }, completedAt: { not: null } },
+          orderBy: { createdAt: "desc" },
+          include: { eventReport: true },
+        }))?.eventReport?.markdown ||
+        "";
 
-    const clubName = state.club.name;
-    const platforms: Platform[] = ["instagram", "linkedin", "whatsapp", "forum"];
+      const clubName = state.club.name;
+      const platforms: Platform[] = ["instagram", "linkedin", "whatsapp", "forum"];
 
-    if (type === "generate_new_posts") {
-      const posts = await Promise.all(
-        platforms.map(async (platform) => {
-          const content = await generateTextWithOpenAI({
-            systemPrompt: buildPostPrompt(platform, eventReport, clubName),
-            userPrompt:
-              "Generate the final post text now. Return plain text only (no markdown syntax).",
+      if (type === "generate_new_posts") {
+        const posts = await Promise.all(
+          platforms.map(async (platform) => {
+            const content = await generateTextWithOpenAI({
+              systemPrompt: buildPostPrompt(platform, eventReport, clubName),
+              userPrompt:
+                "Generate the final post text now. Return plain text only (no markdown syntax).",
+            });
+            return { platform, content: sanitizePostContent(content) };
+          })
+        );
+
+        network!.state.data.posts = posts;
+
+        if (fragmentId) {
+          await prisma.eventPost.deleteMany({ where: { fragmentId } });
+          await prisma.eventPost.createMany({
+            data: posts.map((p) => ({ fragmentId, platform: p.platform, content: p.content })),
           });
-          return { platform, content: sanitizePostContent(content) };
-        })
-      );
+        }
 
-      network!.state.data.posts = posts;
+        await publishers.publishFragmentUpdate("posts", posts);
+        return "All posts generated successfully.";
+      }
+
+      // Modify existing post
+      const targetPlatform: Platform = isPlatform(post_platform)
+        ? post_platform
+        : "instagram";
+      const existing = state.posts?.find((p) => p.platform === targetPlatform);
+
+      const editedPost = await generateTextWithOpenAI({
+        systemPrompt: buildPostPrompt(
+          targetPlatform,
+          eventReport,
+          clubName,
+          existing?.content,
+          edits_requested
+        ),
+        userPrompt:
+          "Apply the edits and return the complete final post text only, in plain text without markdown syntax.",
+      });
+      const newContent = sanitizePostContent(editedPost);
+
+      const updatedPosts = (state.posts ?? []).map((p) =>
+        p.platform === targetPlatform ? { ...p, content: newContent } : p
+      );
+      if (!updatedPosts.find((p) => p.platform === targetPlatform)) {
+        updatedPosts.push({ platform: targetPlatform, content: newContent });
+      }
+      network!.state.data.posts = updatedPosts;
 
       if (fragmentId) {
-        await prisma.eventPost.deleteMany({ where: { fragmentId } });
-        await prisma.eventPost.createMany({
-          data: posts.map((p) => ({ fragmentId, platform: p.platform, content: p.content })),
+        await prisma.eventPost.upsert({
+          where: { fragmentId_platform: { fragmentId, platform: targetPlatform } } as any,
+          create: { fragmentId, platform: targetPlatform, content: newContent },
+          update: { content: newContent },
         });
       }
 
-      await publishers.publishFragmentUpdate("posts", posts);
-      return "All posts generated successfully.";
-    }
-
-    // Modify existing post
-    const targetPlatform: Platform = isPlatform(post_platform)
-      ? post_platform
-      : "instagram";
-    const existing = state.posts?.find((p) => p.platform === targetPlatform);
-
-    const editedPost = await generateTextWithOpenAI({
-      systemPrompt: buildPostPrompt(
-        targetPlatform,
-        eventReport,
-        clubName,
-        existing?.content,
-        edits_requested
-      ),
-      userPrompt:
-        "Apply the edits and return the complete final post text only, in plain text without markdown syntax.",
+      await publishers.publishFragmentUpdate("posts", updatedPosts);
+      return `Post for "${targetPlatform}" modified successfully.`;
     });
-    const newContent = sanitizePostContent(editedPost);
-
-    const updatedPosts = (state.posts ?? []).map((p) =>
-      p.platform === targetPlatform ? { ...p, content: newContent } : p
-    );
-    if (!updatedPosts.find((p) => p.platform === targetPlatform)) {
-      updatedPosts.push({ platform: targetPlatform, content: newContent });
-    }
-    network!.state.data.posts = updatedPosts;
-
-    if (fragmentId) {
-      await prisma.eventPost.upsert({
-        where: { fragmentId_platform: { fragmentId, platform: targetPlatform } } as any,
-        create: { fragmentId, platform: targetPlatform, content: newContent },
-        update: { content: newContent },
-      });
-    }
-
-    await publishers.publishFragmentUpdate("posts", updatedPosts);
-    return `Post for "${targetPlatform}" modified successfully.`;
   },
 });

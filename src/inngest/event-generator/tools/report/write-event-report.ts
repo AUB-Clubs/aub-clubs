@@ -10,25 +10,27 @@ export const write_event_report = createTool<AgentState>({
     explanation: z.string(),
     event_markdown_report: z.string().describe("Full markdown report following the EVENT REPORT STRUCTURE."),
   }),
-  handler: async ({ explanation, event_markdown_report }, { network }) => {
+  handler: async ({ explanation, event_markdown_report }, { step, network }) => {
     const { fragmentId, publishers } = network!.state.data;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("write_event_report:explain", () => publishers.publishChunk(explanation));
 
-    // Save to state
-    network!.state.data.report = event_markdown_report;
+    return await step!.run("write_event_report", async () => {
+      // Save to state
+      network!.state.data.report = event_markdown_report;
 
-    // Save to DB (current incomplete fragment)
-    if (fragmentId) {
-      await prisma.eventReport.upsert({
-        where: { fragmentId },
-        create: { fragmentId, markdown: event_markdown_report },
-        update: { markdown: event_markdown_report },
-      });
-    }
+      // Save to DB (current incomplete fragment)
+      if (fragmentId) {
+        await prisma.eventReport.upsert({
+          where: { fragmentId },
+          create: { fragmentId, markdown: event_markdown_report },
+          update: { markdown: event_markdown_report },
+        });
+      }
 
-    await publishers.publishFragmentUpdate("report", { markdown: event_markdown_report });
+      await publishers.publishFragmentUpdate("report", { markdown: event_markdown_report });
 
-    return "Event report created successfully.";
+      return "Event report created successfully.";
+    });
   },
 });

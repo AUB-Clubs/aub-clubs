@@ -13,7 +13,7 @@ export const get_user_approval_event = createTool<AgentState>({
     const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("get_user_approval_event:explain", () => publishers.publishChunk(explanation));
 
     await step!.run("set-awaiting-event-approval", async () => {
       await prisma.project.update({
@@ -22,11 +22,13 @@ export const get_user_approval_event = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "awaiting_event_approval", clubId, projectId },
-    });
+    await step!.run("get_user_approval_event:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_event_approval", clubId, projectId },
+      })
+    );
 
     const response = await step!.waitForEvent("wait-for-event-approval", {
       event: "event-generator/event-approval",
@@ -41,11 +43,13 @@ export const get_user_approval_event = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "hil_completed", hilType: "event_approval", clubId, projectId },
-    });
+    await step!.run("get_user_approval_event:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "event_approval", clubId, projectId },
+      })
+    );
 
     const approved: boolean = response?.data.approved ?? false;
     const editNotes: string = response?.data.editNotes ?? "";

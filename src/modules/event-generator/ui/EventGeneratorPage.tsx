@@ -537,7 +537,15 @@ export default function EventGeneratorPage({ clubId, projectId }: Props) {
 
   const handleSend = () => {
     const value = inputValue.trim();
-    if (!value || sendMutation.isPending || hilState || isHilPendingSubmission) return;
+    if (
+      !value ||
+      isAgentActive ||
+      sendMutation.isPending ||
+      hilState ||
+      isHilPendingSubmission
+    ) {
+      return;
+    }
 
     setOptimisticMessage({
       id: `optimistic-${Date.now()}`,
@@ -602,7 +610,8 @@ export default function EventGeneratorPage({ clubId, projectId }: Props) {
   );
 
   const isAwaitingHilResolution = isHilPendingSubmission;
-  const isBlocked = !!hilState || isAwaitingHilResolution || sendMutation.isPending;
+  const isBlocked =
+    isAgentActive || !!hilState || isAwaitingHilResolution || sendMutation.isPending;
   const messagesForRender =
     optimisticMessage && !messages.some((message) => message.id === optimisticMessage.id)
       ? [...messages, optimisticMessage]
@@ -683,7 +692,9 @@ export default function EventGeneratorPage({ clubId, projectId }: Props) {
           <Textarea
             className="min-h-[40px] max-h-32 resize-none flex-1 text-sm"
             placeholder={
-              hilState || isAwaitingHilResolution
+              isAgentActive
+                ? "Agent is generating…"
+                : hilState || isAwaitingHilResolution
                 ? "Respond to the request above…"
                 : "What would you like to do?"
             }

@@ -14,7 +14,7 @@ export const provide_ideas_options = createTool<AgentState>({
     const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("provide_ideas_options:explain", () => publishers.publishChunk(explanation));
 
     await step!.run("set-awaiting-idea", async () => {
       await prisma.project.update({
@@ -23,11 +23,13 @@ export const provide_ideas_options = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "awaiting_idea_selection", clubId, projectId, ideas: ideas_list },
-    });
+    await step!.run("provide_ideas_options:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_idea_selection", clubId, projectId, ideas: ideas_list },
+      })
+    );
 
     const response = await step!.waitForEvent("wait-for-idea", {
       event: "event-generator/idea-response",
@@ -47,11 +49,13 @@ export const provide_ideas_options = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "hil_completed", hilType: "idea_selection", clubId, projectId },
-    });
+    await step!.run("provide_ideas_options:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "idea_selection", clubId, projectId },
+      })
+    );
 
     return selectedIdea;
   },

@@ -31,34 +31,36 @@ export const log_sponsors_speakers_buildings = createTool<AgentState>({
     sponsors_list: z.array(SponsorSchema),
     buildings_list: z.array(BuildingSchema),
   }),
-  handler: async ({ explanation, speakers_list, sponsors_list, buildings_list }, { network }) => {
+  handler: async ({ explanation, speakers_list, sponsors_list, buildings_list }, { step, network }) => {
     const { fragmentId, publishers } = network!.state.data;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("log_sponsors_speakers_buildings:explain", () => publishers.publishChunk(explanation));
 
-    // Save to state
-    network!.state.data.speakers = speakers_list;
-    network!.state.data.sponsors = sponsors_list;
-    network!.state.data.buildings = buildings_list;
+    return await step!.run("log_sponsors_speakers_buildings", async () => {
+      // Save to state
+      network!.state.data.speakers = speakers_list;
+      network!.state.data.sponsors = sponsors_list;
+      network!.state.data.buildings = buildings_list;
 
-    // Save to DB (current incomplete fragment)
-    if (fragmentId) {
-      await prisma.$transaction([
-        prisma.eventSpeaker.deleteMany({ where: { fragmentId } }),
-        prisma.eventSponsor.deleteMany({ where: { fragmentId } }),
-        prisma.eventBuilding.deleteMany({ where: { fragmentId } }),
-        prisma.eventSpeaker.createMany({
-          data: speakers_list.map((s) => ({ fragmentId, ...s })),
-        }),
-        prisma.eventSponsor.createMany({
-          data: sponsors_list.map((s) => ({ fragmentId, ...s })),
-        }),
-        prisma.eventBuilding.createMany({
-          data: buildings_list.map((b) => ({ fragmentId, ...b })),
-        }),
-      ]);
-    }
+      // Save to DB (current incomplete fragment)
+      if (fragmentId) {
+        await prisma.$transaction([
+          prisma.eventSpeaker.deleteMany({ where: { fragmentId } }),
+          prisma.eventSponsor.deleteMany({ where: { fragmentId } }),
+          prisma.eventBuilding.deleteMany({ where: { fragmentId } }),
+          prisma.eventSpeaker.createMany({
+            data: speakers_list.map((s) => ({ fragmentId, ...s })),
+          }),
+          prisma.eventSponsor.createMany({
+            data: sponsors_list.map((s) => ({ fragmentId, ...s })),
+          }),
+          prisma.eventBuilding.createMany({
+            data: buildings_list.map((b) => ({ fragmentId, ...b })),
+          }),
+        ]);
+      }
 
-    return "Speakers, sponsors, and buildings logged successfully.";
+      return "Speakers, sponsors, and buildings logged successfully.";
+    });
   },
 });

@@ -13,7 +13,7 @@ export const get_user_approval_emails = createTool<AgentState>({
     const { clubId, projectId, publishers } = network!.state.data;
     const channel = `club:${clubId}:project:${projectId}`;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("get_user_approval_emails:explain", () => publishers.publishChunk(explanation));
 
     await step!.run("set-awaiting-email-approval", async () => {
       await prisma.project.update({
@@ -22,11 +22,13 @@ export const get_user_approval_emails = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "awaiting_email_approval", clubId, projectId },
-    });
+    await step!.run("get_user_approval_emails:publish-awaiting", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "awaiting_email_approval", clubId, projectId },
+      })
+    );
 
     const response = await step!.waitForEvent("wait-for-email-approval", {
       event: "event-generator/email-approval",
@@ -41,11 +43,13 @@ export const get_user_approval_emails = createTool<AgentState>({
       });
     });
 
-    await publishers.publish({
-      channel,
-      topic: "ai",
-      data: { type: "hil_completed", hilType: "email_approval", clubId, projectId },
-    });
+    await step!.run("get_user_approval_emails:publish-completed", () =>
+      publishers.publish({
+        channel,
+        topic: "ai",
+        data: { type: "hil_completed", hilType: "email_approval", clubId, projectId },
+      })
+    );
 
     const approved: boolean = response?.data.approved ?? false;
     const editNotes: string = response?.data.editNotes ?? "";

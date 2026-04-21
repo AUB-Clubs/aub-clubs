@@ -9,21 +9,23 @@ export const getEventsThisSemester = createTool<AgentState>({
   parameters: z.object({
     explanation: z.string(),
   }),
-  handler: async ({ explanation }, { network }) => {
+  handler: async ({ explanation }, { step, network }) => {
     const { publishers } = network!.state.data;
 
-    await publishers.publishChunk(explanation);
+    await step!.run("getEventsThisSemester:explain", () => publishers.publishChunk(explanation));
 
-    try {
-      const events = await prisma.event.findMany({
-        orderBy: { startsAt: "asc" },
-        include: { club: { select: { title: true } } },
-        take: 100,
-      });
+    return await step!.run("getEventsThisSemester", async () => {
+      try {
+        const events = await prisma.event.findMany({
+          orderBy: { startsAt: "asc" },
+          include: { club: { select: { title: true } } },
+          take: 100,
+        });
 
-      return JSON.stringify(events, null, 2);
-    } catch (e: any) {
-      return "Failed to fetch events: " + e.message;
-    }
+        return JSON.stringify(events, null, 2);
+      } catch (e: any) {
+        return "Failed to fetch events: " + e.message;
+      }
+    });
   },
 });

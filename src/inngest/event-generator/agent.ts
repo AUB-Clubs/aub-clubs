@@ -1,5 +1,5 @@
 import { createAgent, openai } from "@inngest/agent-kit";
-import { lastAssistantTextMessageContent } from "../utils";
+import { extractTaskSummary, lastAssistantTextMessageContent } from "../utils";
 import type { AgentState } from "./types";
 import * as tools from "./tools";
 
@@ -18,8 +18,9 @@ export function createEventGeneratorAgent(systemPrompt: string) {
     lifecycle: {
       onResponse: async ({ result, network }) => {
         const text = lastAssistantTextMessageContent(result);
-        if (text?.includes("<task_summary>") && network) {
-          network.state.data.summary = text;
+        const summary = extractTaskSummary(text);
+        if (summary && network) {
+          network.state.data.summary = summary;
         }
         return result;
       },
