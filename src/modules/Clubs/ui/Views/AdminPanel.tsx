@@ -67,9 +67,12 @@ import {
   Loader2,
   Save,
   Sparkles,
+  Download,
+  FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { MAX_UPLOAD_FILE_BYTES, prepareImageDataUrlForUpload } from '@/lib/client-image-upload'
+import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -111,6 +114,11 @@ function formatDate(iso: string) {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function escapeCsv(value: string) {
+  const v = value.replace(/"/g, '""')
+  return `"${v}"`
 }
 
 // ── Main Component ───────────────────────────────────────────────────
@@ -818,6 +826,106 @@ function MembersSection({ clubId, actorRole }: { clubId: string; actorRole: stri
   })
 
   const data = membersQuery.data
+  const exportQuery = trpc.clubs.memberManagement.getMembersForExport.useQuery(
+    { clubId },
+    { enabled: false }
+  )
+  const [isExportingCsv, setIsExportingCsv] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
+
+  async function fetchExportData() {
+    const result = await exportQuery.refetch()
+    if (!result.data) throw new Error('Could not load members for export')
+    return result.data
+  }
+
+  async function handleExportCsv() {
+    try {
+      setIsExportingCsv(true)
+      const exportData = await fetchExportData()
+      const header = ['First Name', 'Last Name', 'Email', 'Role', 'Joined At']
+      const rows = exportData.members.map((m) => [
+        m.firstName,
+        m.lastName,
+        m.email,
+        ROLE_LABELS[m.role] ?? m.role,
+        new Date(m.joinedAt).toISOString(),
+      ])
+      const csv = [header, ...rows]
+        .map((line) => line.map((cell) => escapeCsv(String(cell ?? ''))).join(','))
+        .join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${exportData.clubTitle.replace(/\s+/g, '_')}_members.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('CSV exported')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to export CSV')
+    } finally {
+      setIsExportingCsv(false)
+    }
+  }
+
+  async function handleExportPdf() {
+    try {
+      setIsExportingPdf(true)
+      const exportData = await fetchExportData()
+      const styles = StyleSheet.create({
+        page: { padding: 24, fontSize: 10 },
+        title: { fontSize: 16, marginBottom: 8 },
+        subtitle: { marginBottom: 12 },
+        headerRow: { flexDirection: 'row', borderBottomWidth: 1, paddingBottom: 4, marginBottom: 4 },
+        row: { flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 0.5 },
+        colName: { width: '28%' },
+        colEmail: { width: '32%' },
+        colRole: { width: '20%' },
+        colDate: { width: '20%' },
+      })
+      const MemberPdf = (
+        <Document>
+          <Page size="A4" style={styles.page}>
+            <Text style={styles.title}>Member List</Text>
+            <Text style={styles.subtitle}>
+              {exportData.clubTitle} (CRN {exportData.crn}) - Exported {new Date(exportData.exportedAt).toLocaleString()}
+            </Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.colName}>Name</Text>
+              <Text style={styles.colEmail}>Email</Text>
+              <Text style={styles.colRole}>Role</Text>
+              <Text style={styles.colDate}>Joined</Text>
+            </View>
+            {exportData.members.map((m, idx) => (
+              <View style={styles.row} key={`${m.email}-${idx}`}>
+                <Text style={styles.colName}>{`${m.firstName} ${m.lastName}`.trim()}</Text>
+                <Text style={styles.colEmail}>{m.email}</Text>
+                <Text style={styles.colRole}>{ROLE_LABELS[m.role] ?? m.role}</Text>
+                <Text style={styles.colDate}>{new Date(m.joinedAt).toLocaleDateString()}</Text>
+              </View>
+            ))}
+          </Page>
+        </Document>
+      )
+      const blob = await pdf(MemberPdf).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${exportData.clubTitle.replace(/\s+/g, '_')}_members.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('PDF exported')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to export PDF')
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   if (membersQuery.isLoading) {
     return (
@@ -868,6 +976,28 @@ function MembersSection({ clubId, actorRole }: { clubId: string; actorRole: stri
             <CardTitle className="text-lg">
               {data.totalCount} member{data.totalCount !== 1 ? 's' : ''}
             </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg"
+                disabled={isExportingCsv || isExportingPdf}
+                onClick={handleExportCsv}
+              >
+                <Download className="size-4 mr-1" />
+                CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg"
+                disabled={isExportingCsv || isExportingPdf}
+                onClick={handleExportPdf}
+              >
+                <FileText className="size-4 mr-1" />
+                PDF
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

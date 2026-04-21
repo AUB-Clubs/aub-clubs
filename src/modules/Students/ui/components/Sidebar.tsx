@@ -61,7 +61,7 @@ export function AppSidebar() {
     { title: "Calendar", url: "/calendar", icon: Calendar },
     { title: "Clubs", url: "/clubs", icon: Users },
     ...(user?.isUniversityAdmin
-      ? [{ title: "Admin reports", url: "/admin/reports", icon: Landmark } as const]
+      ? [{ title: "Admin panel", url: "/admin", icon: Landmark } as const]
       : []),
   ];
 

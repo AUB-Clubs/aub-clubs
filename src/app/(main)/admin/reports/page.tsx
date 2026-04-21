@@ -1,5 +1,5 @@
-import { UniversityAdminReportsPage } from '@/modules/university-admin/ui/UniversityAdminReportsPage'
+import { redirect } from 'next/navigation'
 
 export default function AdminReportsPage() {
-  return <UniversityAdminReportsPage />
+  redirect('/admin')
 }

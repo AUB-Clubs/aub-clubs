@@ -78,6 +78,13 @@ function refDateFromMinutes(minutes: number): Date {
   return new Date(Date.UTC(1970, 0, 1, 0, minutes, 0, 0));
 }
 
+async function getMicrosoftLinkForUser(userId: string) {
+  return prisma.userMicrosoftCalendarLink.findUnique({
+    where: { userId },
+    select: { id: true, accountEmail: true },
+  });
+}
+
 export const calendarRouter = createTRPCRouter({
   getStudentCalendar: protectedProcedure
     .input(
@@ -121,10 +128,7 @@ export const calendarRouter = createTRPCRouter({
 
       const myClubIds = new Set(memberships.map((m) => m.clubId));
 
-      const link = await prisma.userMicrosoftCalendarLink.findUnique({
-        where: { userId: ctx.user.id },
-        select: { id: true },
-      });
+      const link = await getMicrosoftLinkForUser(ctx.user.id);
 
       let outlookEvents: Array<{
         id: string;
@@ -186,10 +190,7 @@ export const calendarRouter = createTRPCRouter({
     }),
 
   getMicrosoftConnectionStatus: protectedProcedure.query(async ({ ctx }) => {
-    const link = await prisma.userMicrosoftCalendarLink.findUnique({
-      where: { userId: ctx.user.id },
-      select: { accountEmail: true },
-    });
+    const link = await getMicrosoftLinkForUser(ctx.user.id);
     return {
       connected: !!link,
       accountEmail: link?.accountEmail ?? null,

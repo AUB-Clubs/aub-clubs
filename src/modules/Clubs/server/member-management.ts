@@ -83,6 +83,48 @@ export const memberManagementRouter = createTRPCRouter({
       }
     }),
 
+  getMembersForExport: protectedProcedure
+    .input(z.object({ clubId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await requireClubAdmin(ctx.user, input.clubId)
+
+      const club = await prisma.club.findUnique({
+        where: { id: input.clubId },
+        select: { title: true, crn: true },
+      })
+
+      if (!club) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Club not found" })
+      }
+
+      const members = await prisma.membership.findMany({
+        where: { clubId: input.clubId, status: "ACCEPTED" },
+        orderBy: [{ role: "desc" }, { joinedAt: "asc" }],
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      })
+
+      return {
+        clubTitle: club.title,
+        crn: club.crn,
+        exportedAt: new Date().toISOString(),
+        members: members.map((m) => ({
+          firstName: m.user.firstName ?? "",
+          lastName: m.user.lastName ?? "",
+          email: m.user.email,
+          role: m.role,
+          joinedAt: m.joinedAt.toISOString(),
+        })),
+      }
+    }),
+
   // ── Pending Requests ───────────────────────────────────────────────
   getPendingRequests: protectedProcedure
     .input(z.object({ clubId: z.string() }))
