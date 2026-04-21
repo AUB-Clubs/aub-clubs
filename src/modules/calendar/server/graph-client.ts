@@ -31,6 +31,10 @@ type GraphEvent = {
   end?: GraphDateTime | { date: string };
 };
 
+type GraphCalendar = {
+  id: string;
+};
+
 function parseGraphDateTime(dt: GraphDateTime): Date {
   return new Date(dt.dateTime);
 }
@@ -106,32 +110,53 @@ export async function fetchMicrosoftCalendarView(
   const accessToken = await getValidAccessTokenForUser(userId);
   const startIso = rangeStart.toISOString();
   const endIso = rangeEnd.toISOString();
-  const url = new URL("https://graph.microsoft.com/v1.0/me/calendarView");
-  url.searchParams.set("startDateTime", startIso);
-  url.searchParams.set("endDateTime", endIso);
-  url.searchParams.set("$top", "250");
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Prefer: `outlook.timezone="${UNIVERSITY_TIMEZONE}"`,
+  };
 
-  const rows: OutlookCalendarEventDTO[] = [];
-  let next: string | null = url.toString();
+  const calendarsUrl = new URL("https://graph.microsoft.com/v1.0/me/calendars");
+  calendarsUrl.searchParams.set("$select", "id");
+  calendarsUrl.searchParams.set("$top", "100");
+  const calendarIds: string[] = [];
+  let calendarsNext: string | null = calendarsUrl.toString();
 
-  while (next) {
-    const res = await fetch(next, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Prefer: `outlook.timezone="${UNIVERSITY_TIMEZONE}"`,
-      },
-    });
+  while (calendarsNext) {
+    const res = await fetch(calendarsNext, { headers });
     if (!res.ok) {
       const t = await res.text();
-      throw new Error(`calendarView failed: ${res.status} ${t}`);
+      throw new Error(`calendars list failed: ${res.status} ${t}`);
     }
-    const body = (await res.json()) as { value?: GraphEvent[]; "@odata.nextLink"?: string };
-    for (const e of body.value ?? []) {
-      const mapped = mapGraphEvent(e);
-      if (mapped) rows.push(mapped);
+    const body = (await res.json()) as { value?: GraphCalendar[]; "@odata.nextLink"?: string };
+    for (const cal of body.value ?? []) {
+      if (cal.id) calendarIds.push(cal.id);
     }
-    next = body["@odata.nextLink"] ?? null;
+    calendarsNext = body["@odata.nextLink"] ?? null;
   }
 
-  return rows;
+  const deduped = new Map<string, OutlookCalendarEventDTO>();
+
+  for (const calendarId of calendarIds) {
+    const url = new URL(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView`);
+    url.searchParams.set("startDateTime", startIso);
+    url.searchParams.set("endDateTime", endIso);
+    url.searchParams.set("$top", "250");
+
+    let next: string | null = url.toString();
+    while (next) {
+      const res = await fetch(next, { headers });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`calendarView failed: ${res.status} ${t}`);
+      }
+      const body = (await res.json()) as { value?: GraphEvent[]; "@odata.nextLink"?: string };
+      for (const e of body.value ?? []) {
+        const mapped = mapGraphEvent(e);
+        if (mapped && !deduped.has(mapped.id)) deduped.set(mapped.id, mapped);
+      }
+      next = body["@odata.nextLink"] ?? null;
+    }
+  }
+
+  return Array.from(deduped.values());
 }

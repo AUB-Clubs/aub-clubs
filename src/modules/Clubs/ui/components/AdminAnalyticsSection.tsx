@@ -1,13 +1,21 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Users, Calendar, Megaphone, FileDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { trpc } from '@/trpc/client'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Document, Page, Text, View, StyleSheet, PDFDownloadLink } from '@react-pdf/renderer'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
-// Create PDF styles
 const styles = StyleSheet.create({
   page: { flexDirection: 'column', backgroundColor: '#ffffff', padding: 30 },
   header: { fontSize: 24, marginBottom: 20, textAlign: 'center', color: '#111' },
@@ -18,7 +26,6 @@ const styles = StyleSheet.create({
   footer: { position: 'absolute', bottom: 30, left: 30, right: 30, textAlign: 'center', color: '#888', fontSize: 10 }
 });
 
-// PDF Document Component
 const AnalyticsPDF = ({ data }: { data: { clubName: string; membersCount: number; eventsCount: number; postsCount: number; } }) => (
   <Document>
     <Page size="A4" style={styles.page}>
@@ -46,7 +53,30 @@ const AnalyticsPDF = ({ data }: { data: { clubName: string; membersCount: number
 
 
 export function AnalyticsSection({ clubId }: { clubId: string }) {
+  const [interval, setInterval] = useState<'monthly' | 'yearly'>('yearly')
   const query = trpc.clubs.analytics.getClubAnalytics.useQuery({ clubId })
+
+  const activityQuery = trpc.clubs.analytics.getClubActivityOverTime.useQuery({
+    clubId,
+    interval,
+  })
+
+  const activityTable = useMemo(() => {
+    const posts = activityQuery.data?.posts ?? []
+    const events = activityQuery.data?.events ?? []
+    const map = new Map<string, { period: string; posts: number; events: number }>()
+    for (const p of posts) {
+      const cur = map.get(p.period) ?? { period: p.period, posts: 0, events: 0 }
+      cur.posts = p.count
+      map.set(p.period, cur)
+    }
+    for (const e of events) {
+      const cur = map.get(e.period) ?? { period: e.period, posts: 0, events: 0 }
+      cur.events = e.count
+      map.set(e.period, cur)
+    }
+    return Array.from(map.values()).sort((a, b) => a.period.localeCompare(b.period))
+  }, [activityQuery.data])
 
   if (query.isLoading) {
     return (
@@ -73,8 +103,6 @@ export function AnalyticsSection({ clubId }: { clubId: string }) {
         
         {data && (
           <div suppressHydrationWarning>
-            {/* Note: React-PDF dynamically forces its button children to function incorrectly with hydration sometimes due to SSR. 
-                The most stable pattern dynamically checks render status on client. */}
             {typeof window !== "undefined" && (
               <PDFDownloadLink 
                 document={<AnalyticsPDF data={data} />} 
@@ -123,6 +151,63 @@ export function AnalyticsSection({ clubId }: { clubId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Activity over time</CardTitle>
+            <CardDescription>
+              Published posts and scheduled events by {interval === 'yearly' ? 'calendar year' : 'month'}.
+            </CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={interval === 'yearly' ? 'default' : 'outline'}
+              onClick={() => setInterval('yearly')}
+            >
+              Yearly
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={interval === 'monthly' ? 'default' : 'outline'}
+              onClick={() => setInterval('monthly')}
+            >
+              Monthly
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {activityQuery.isLoading ? (
+            <Skeleton className="h-40 w-full rounded-md" />
+          ) : activityTable.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No activity in this view yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{interval === 'yearly' ? 'Year' : 'Month'}</TableHead>
+                    <TableHead className="text-right">Posts</TableHead>
+                    <TableHead className="text-right">Events</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activityTable.map((row) => (
+                    <TableRow key={row.period}>
+                      <TableCell className="font-medium">{row.period}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.posts}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.events}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   )

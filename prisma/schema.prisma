@@ -104,6 +104,11 @@ enum ScheduleInferenceStatus {
   FAILED
   REJECTED
 }
+enum ClubStatus {
+  PENDING_REVIEW
+  ACTIVE
+  INACTIVE
+}
 
 // --------------------
 // Models
@@ -173,6 +178,8 @@ model Club {
   websiteUrl   String? @map("website_url")
   defaultEventColor String? @default("#2563EB") @map("default_event_color")
 
+  status ClubStatus @default(PENDING_REVIEW)
+
   types ClubType[] // Cloud Native PG handles scalar arrays natively
 
   // Relations
@@ -183,6 +190,7 @@ model Club {
   events          Event[]
 
   @@map("clubs")
+  clubFinances ClubFinance[]
 }
 
 model Membership {
@@ -646,4 +654,22 @@ model CommentLike {
   @@unique([userId, commentId])
   @@index([commentId])
   @@map("comment_likes")
+}
+
+model ClubFinance {
+  id        String   @id @default(uuid())
+  clubId    String
+  amount    Float
+  type      FinanceType
+  description String?
+  createdAt DateTime @default(now())
+
+  club      Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+}
+
+enum FinanceType {
+  INCOME
+  EXPENSE
 }
