@@ -371,7 +371,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     const sessions = sessionsQuery.data ?? [];
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0">
           <span className="font-semibold text-sm">Chats</span>
           <div className="flex items-center gap-1">
             <Button
@@ -434,7 +434,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           )}
         </ScrollArea>
 
-        <div className="p-3 border-t">
+        <div className="p-3 border-t shrink-0">
           <Button
             className="w-full gap-2"
             onClick={() => createSession.mutate({})}
@@ -487,7 +487,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         )}
       </div>
 
-      <ScrollArea className="flex-1 min-w-0 px-3 py-3">
+      <ScrollArea className="flex-1 min-w-0 min-h-0 px-3 py-3">
         <div className="space-y-3 min-w-0">
           {sessionQuery.isLoading ? (
             <div className="space-y-2">
@@ -542,7 +542,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         <div ref={bottomRef} />
       </ScrollArea>
 
-      <div className="p-3 border-t flex gap-2 items-end">
+      <div className="p-3 border-t flex gap-2 items-end shrink-0">
         <Textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
