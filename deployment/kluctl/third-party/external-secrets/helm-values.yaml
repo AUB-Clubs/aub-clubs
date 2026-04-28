@@ -1,0 +1,7 @@
+installCRDs: true
+
+serviceAccount:
+  create: true
+  name: external-secrets
+  annotations:
+    iam.gke.io/gcp-service-account: "{{ sharedVars.externalSecretsGcpServiceAccount }}"
