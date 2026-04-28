@@ -47,12 +47,12 @@ function StreamingMessage({ content }: { content: string }) {
     }
 
     const charsToAdd = content.slice(displayedContent.length);
-    const delay = Math.max(15, Math.min(40, 1000 / charsToAdd.length));
+    const delay = Math.max(10, Math.min(30, 400 / charsToAdd.length));
     
     let currentIndex = displayedContent.length;
     const interval = setInterval(() => {
-      currentIndex++;
-      setDisplayedContent(content.slice(0, currentIndex));
+      currentIndex += Math.max(1, Math.ceil(charsToAdd.length / 20));
+      setDisplayedContent(content.slice(0, Math.min(currentIndex, content.length)));
       if (currentIndex >= content.length) {
         clearInterval(interval);
       }
@@ -79,13 +79,13 @@ function MessageBubble({ role, content, isStreaming }: { role: string; content: 
     'text-sm leading-relaxed break-words [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc [&_ul]:space-y-1';
 
   return (
-    <div className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[82%] min-w-0 rounded-2xl px-3 py-2 break-words',
+          'max-w-[85%] rounded-2xl px-4 py-2 break-words',
           isUser
             ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-foreground',
+            : 'bg-muted text-foreground overflow-x-hidden',
         )}
       >
         {isUser ? (
@@ -170,17 +170,17 @@ function ToolInvocationBubble({ toolNames }: { toolNames: string[] }) {
   const toolList = toSingleLine(toolNames.join(', '));
 
   return (
-    <div className="flex w-full min-w-0 justify-start">
-      <div className="max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2 overflow-hidden">
-        <div className="flex min-w-0 items-start gap-2 text-xs">
+    <div className="flex w-full justify-start">
+      <div className="max-w-[92%] rounded-lg border bg-muted/25 px-3 py-2">
+        <div className="flex items-start gap-2 text-xs">
           <Badge
             variant="outline"
-            className="h-auto shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium overflow-hidden"
+            className="h-auto shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium"
           >
             <Wrench className="size-3 shrink-0" />
             <span className="whitespace-nowrap">Tool call</span>
           </Badge>
-          <span className="min-w-0 flex-1 truncate text-muted-foreground leading-5">
+          <span className="flex-1 text-muted-foreground leading-5 break-all">
             {toolList}
           </span>
         </div>
@@ -195,21 +195,21 @@ function ToolResultBubble({ toolName, content }: { toolName?: string | null; con
   const preview = previewLine.length > 180 ? `${previewLine.slice(0, 180)}…` : previewLine;
 
   return (
-    <div className="flex w-full min-w-0 justify-start">
-      <details className="group max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2 text-xs overflow-hidden">
+    <div className="flex w-full justify-start">
+      <details className="group max-w-[92%] rounded-lg border bg-muted/25 px-3 py-2 text-xs">
         <summary className="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
           <Badge
             variant="secondary"
-            className="h-auto max-w-56 shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5 overflow-hidden"
+            className="h-auto shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5"
           >
             <Wrench className="size-3 shrink-0" />
-            <span className="truncate">{toolName ?? 'tool'}</span>
+            <span className="break-all">{toolName ?? 'tool'}</span>
           </Badge>
-          <span className="min-w-0 flex-1 truncate text-muted-foreground leading-5">
+          <span className="flex-1 text-muted-foreground leading-5 break-all line-clamp-2">
             {preview || 'Tool returned no output.'}
           </span>
         </summary>
-        <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-background p-2 text-xs leading-relaxed whitespace-pre-wrap break-words">
+        <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-background p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">
           {formatted || 'Tool returned no output.'}
         </pre>
       </details>
@@ -355,13 +355,17 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
   const dbMessages = (sessionQuery.data?.messages ?? []) as ChatMessage[];
   
-  // If we have a pending message, check if the DB has caught up.
-  // We expect the DB to have at least `minCount` messages once the user message is saved.
-  const pendingInDb = pendingMsg && dbMessages.length >= pendingMsg.minCount;
+  const pendingInDb = pendingMsg && dbMessages.some((m) => normalizeRole(m.role) === 'USER' && (m.content ?? '').trim() === pendingMsg.msg.content.trim() && m.id !== 'pending-user-message');
 
   const visibleMessages = pendingMsg && !pendingInDb 
     ? [...dbMessages, pendingMsg.msg] 
     : dbMessages;
+
+  useEffect(() => {
+    if (pendingInDb) {
+      setPendingMsg(null);
+    }
+  }, [pendingInDb]);
 
 
 
@@ -449,7 +453,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0">
         <Button
           size="icon"
@@ -487,8 +491,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
         )}
       </div>
 
-      <ScrollArea className="flex-1 min-w-0 min-h-0 px-3 py-3">
-        <div className="space-y-3 min-w-0 w-full pb-4">
+      <ScrollArea className="flex-1 px-3 py-3 overflow-x-hidden">
+        <div className="space-y-4 w-full overflow-x-hidden pb-4">
           {sessionQuery.isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-3/4 rounded-2xl" />
