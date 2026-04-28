@@ -254,7 +254,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     { sessionId: activeSessionId! },
     {
       enabled: !!activeSessionId,
-      refetchInterval: isStreaming ? 1000 : false,
+      refetchInterval: isStreaming ? 500 : false,
       refetchIntervalInBackground: true,
     },
   );
