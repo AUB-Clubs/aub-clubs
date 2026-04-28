@@ -144,6 +144,7 @@ model User {
   comments            Comment[]
   commentLikes        CommentLike[]
   microsoftCalendarLink UserMicrosoftCalendarLink?
+  chatbotSessions     ChatbotSession[]
 
   @@map("users")
 }
@@ -672,4 +673,40 @@ model ClubFinance {
 enum FinanceType {
   INCOME
   EXPENSE
+}
+
+enum ChatbotMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+model ChatbotSession {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatbotMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("chatbot_sessions")
+}
+
+model ChatbotMessage {
+  id         String             @id @default(uuid())
+  sessionId  String             @map("session_id")
+  role       ChatbotMessageRole
+  content    String?            @db.Text
+  toolCalls  Json?              @map("tool_calls")
+  toolCallId String?            @map("tool_call_id")
+  toolName   String?            @map("tool_name")
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  session ChatbotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt(sort: Asc)])
+  @@map("chatbot_messages")
 }

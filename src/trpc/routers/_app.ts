@@ -14,6 +14,7 @@ import { calendarRouter } from '../../modules/calendar/server/router';
 import { scheduleInferenceRouter } from '../../modules/schedule-inference/server/router';
 import { eventGeneratorRouter } from '../../modules/event-generator/server/router';
 import { adminRouter } from '../../modules/admin/server/admin';
+import { chatbotRouter } from '../../modules/chatbot/server/chatbot';
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -31,6 +32,7 @@ export const appRouter = createTRPCRouter({
   scheduleInference: scheduleInferenceRouter,
   admin: adminRouter,
   eventGenerator: eventGeneratorRouter,
+  chatbot: chatbotRouter,
 });
 
 export type AppRouter = typeof appRouter;

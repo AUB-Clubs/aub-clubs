@@ -11,6 +11,7 @@ import { AppSidebar } from '@/modules/Students/ui/components/Sidebar';
 import { ClubSearchBar } from '@/modules/Clubs/ui/components/ClubSearchBar';
 import { ClubSearchBarSkeleton } from '@/modules/Clubs/ui/components/Skeletons';
 import { Separator } from '@/components/ui/separator';
+import { FloatingChatBubble } from '@/modules/chatbot/ui/components/FloatingChatBubble';
 
 export function MainLayoutClient({
   children,
@@ -48,6 +49,7 @@ export function MainLayoutClient({
           {children}
         </div>
       </SidebarInset>
+      {!isEventGeneratorChat && <FloatingChatBubble />}
     </SidebarProvider>
   );
 }
