@@ -35,7 +35,44 @@ function normalizeRole(role: string | null | undefined): MessageRole {
   return 'ASSISTANT';
 }
 
-function MessageBubble({ role, content }: { role: string; content: string }) {
+function StreamingMessage({ content }: { content: string }) {
+  const [displayedContent, setDisplayedContent] = useState(content);
+
+  useEffect(() => {
+    if (content === displayedContent) return;
+
+    if (content.length < displayedContent.length || !content.startsWith(displayedContent)) {
+      setDisplayedContent(content);
+      return;
+    }
+
+    const charsToAdd = content.slice(displayedContent.length);
+    const delay = Math.max(15, Math.min(40, 1000 / charsToAdd.length));
+    
+    let currentIndex = displayedContent.length;
+    const interval = setInterval(() => {
+      currentIndex++;
+      setDisplayedContent(content.slice(0, currentIndex));
+      if (currentIndex >= content.length) {
+        clearInterval(interval);
+      }
+    }, delay);
+
+    return () => clearInterval(interval);
+  }, [content, displayedContent]);
+
+  const markdownClassName =
+    'text-sm leading-relaxed break-words [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc [&_ul]:space-y-1';
+
+  return (
+    <article
+      className={markdownClassName}
+      dangerouslySetInnerHTML={{ __html: renderMarkdownToHtml(displayedContent) }}
+    />
+  );
+}
+
+function MessageBubble({ role, content, isStreaming }: { role: string; content: string; isStreaming?: boolean }) {
   const isUser = normalizeRole(role) === 'USER';
 
   const markdownClassName =
@@ -53,6 +90,8 @@ function MessageBubble({ role, content }: { role: string; content: string }) {
       >
         {isUser ? (
           <span className="text-sm leading-relaxed whitespace-pre-wrap">{content}</span>
+        ) : isStreaming ? (
+          <StreamingMessage content={content} />
         ) : (
           <article
             className={markdownClassName}
@@ -254,7 +293,16 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     if (view === 'chat') {
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     }
-  }, [sessionQuery.data, isStreaming, view]);
+  }, [sessionQuery.data?.messages?.length, isStreaming, view]);
+
+  useEffect(() => {
+    if (isStreaming && view === 'chat') {
+      const interval = setInterval(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isStreaming, view]);
 
   const openSession = useCallback((id: string) => {
     localStorage.setItem('chatbot_session_id', id);
@@ -322,7 +370,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   if (view === 'sessions') {
     const sessions = sessionsQuery.data ?? [];
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full overflow-hidden">
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
           <span className="font-semibold text-sm">Chats</span>
           <div className="flex items-center gap-1">
@@ -351,7 +399,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 px-2 py-2">
+        <ScrollArea className="flex-1 min-h-0 px-2 py-2">
           {sessionsQuery.isLoading ? (
             <div className="space-y-2 px-2">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
@@ -401,8 +449,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col h-full">
-      <div className="flex items-center gap-2 px-3 py-2 border-b">
+    <div className="flex min-w-0 flex-col h-full overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0">
         <Button
           size="icon"
           variant="ghost"
@@ -451,8 +499,10 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
               Ask me anything about AUB clubs — interests, availability, goals.
             </p>
           ) : (
-            visibleMessages.map((m) => {
+            visibleMessages.map((m, i) => {
               const normalizedRole = normalizeRole(m.role);
+              const isLast = i === visibleMessages.length - 1;
+              const isCurrentlyStreaming = isStreaming && isLast && normalizedRole === 'ASSISTANT';
 
               if (normalizedRole === 'TOOL') {
                 return (
@@ -472,7 +522,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                   return (
                     <div key={m.id} className="space-y-2">
                       <ToolInvocationBubble toolNames={toolNames} />
-                      <MessageBubble role={normalizedRole} content={m.content ?? ''} />
+                      <MessageBubble role={normalizedRole} content={m.content ?? ''} isStreaming={isCurrentlyStreaming} />
                     </div>
                   );
                 }
@@ -484,7 +534,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                 if (!hasContent) return null;
               }
 
-              return <MessageBubble key={m.id} role={normalizedRole} content={m.content ?? ''} />;
+              return <MessageBubble key={m.id} role={normalizedRole} content={m.content ?? ''} isStreaming={isCurrentlyStreaming && normalizedRole === 'ASSISTANT'} />;
             })
           )}
           {isStreaming && <TypingIndicator />}
