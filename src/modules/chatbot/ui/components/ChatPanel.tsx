@@ -42,7 +42,7 @@ function StreamingMessage({ content }: { content: string }) {
     if (content === displayedContent) return;
 
     if (content.length < displayedContent.length || !content.startsWith(displayedContent)) {
-      setDisplayedContent(content);
+      setTimeout(() => setDisplayedContent(content), 0);
       return;
     }
 
@@ -103,50 +103,6 @@ function MessageBubble({ role, content, isStreaming }: { role: string; content: 
   );
 }
 
-function getToolNames(toolCalls: unknown): string[] {
-  const calls = Array.isArray(toolCalls)
-    ? toolCalls
-    : typeof toolCalls === 'object' && toolCalls !== null
-      ? Array.isArray(Reflect.get(toolCalls, 'calls'))
-        ? (Reflect.get(toolCalls, 'calls') as unknown[])
-        : Object.values(toolCalls as Record<string, unknown>)
-      : [];
-  const names: string[] = [];
-  for (const call of calls) {
-    if (typeof call !== 'object' || call === null) {
-      continue;
-    }
-
-    const directName = Reflect.get(call, 'name');
-    if (typeof directName === 'string' && directName.trim().length > 0) {
-      names.push(directName);
-      continue;
-    }
-
-    const alternateName = Reflect.get(call, 'toolName');
-    if (typeof alternateName === 'string' && alternateName.trim().length > 0) {
-      names.push(alternateName);
-      continue;
-    }
-
-    const type = Reflect.get(call, 'type');
-    if (typeof type === 'string' && type !== 'function') {
-      continue;
-    }
-
-    const fn = Reflect.get(call, 'function');
-    if (typeof fn !== 'object' || fn === null) {
-      continue;
-    }
-
-    const name = Reflect.get(fn, 'name');
-    if (typeof name === 'string' && name.trim().length > 0) {
-      names.push(name);
-    }
-  }
-
-  return [...new Set(names)];
-}
 
 function formatToolContent(content: string | null) {
   if (!content) return '';
@@ -222,7 +178,6 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const [draft, setDraft] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const isSending = useRef(false);
   const [pendingMsg, setPendingMsg] = useState<{ msg: ChatMessage, minCount: number } | null>(null);
 
   const sessionsQuery = trpc.chatbot.listSessions.useQuery();
@@ -257,12 +212,10 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       void utils.chatbot.getSession.invalidate({ sessionId });
       void utils.chatbot.listSessions.invalidate();
       setIsStreaming(false);
-      isSending.current = false;
     },
     onError: () => {
       setPendingMsg(null);
       setIsStreaming(false);
-      isSending.current = false;
     },
   });
 
@@ -305,8 +258,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
   const handleSend = useCallback(async () => {
     const content = draft.trim();
-    if (!content || isSending.current) return;
-    isSending.current = true;
+    if (!content || sendMessage.isPending || createSession.isPending) return;
     setDraft('');
 
     if (activeSessionId) {
@@ -318,10 +270,9 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       const result = await createSession.mutateAsync({});
       queueSend(result.sessionId, content);
     } catch {
-      isSending.current = false;
       setIsStreaming(false);
     }
-  }, [draft, activeSessionId, queueSend, createSession]);
+  }, [draft, activeSessionId, queueSend, createSession, sendMessage.isPending]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -332,7 +283,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
   const dbMessages = (sessionQuery.data?.messages ?? []) as ChatMessage[];
   
-  const pendingInDb = pendingMsg && dbMessages.some((m) => normalizeRole(m.role) === 'USER' && (m.content ?? '').trim() === pendingMsg.msg.content.trim() && m.id !== 'pending-user-message');
+  const pendingInDb = pendingMsg && dbMessages.length >= pendingMsg.minCount;
 
   const visibleMessages = pendingMsg && !pendingInDb 
     ? [...dbMessages, pendingMsg.msg] 
@@ -340,7 +291,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
   useEffect(() => {
     if (pendingInDb) {
-      setPendingMsg(null);
+      setTimeout(() => setPendingMsg(null), 0);
     }
   }, [pendingInDb]);
 
