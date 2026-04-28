@@ -85,8 +85,13 @@ async function callMcpTool(name: string, args: unknown): Promise<string> {
   });
   const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
   const text = content
-    .filter((c) => c.type === 'text' && typeof c.text === 'string')
-    .map((c) => c.text!)
+    .map((c) => {
+      if (c.type === 'text' && typeof c.text === 'string') {
+        return c.text;
+      }
+      return JSON.stringify(c);
+    })
+    .filter((chunk) => chunk.length > 0)
     .join('\n');
   return text || JSON.stringify(result);
 }
@@ -149,6 +154,44 @@ function buildToolCalls(
         arguments: value.args || '{}',
       },
     }));
+}
+
+function normalizeToolArguments(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return {};
+    try {
+      return normalizeToolArguments(JSON.parse(trimmed) as unknown);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function parseToolArguments(rawArguments: string): Record<string, unknown> {
+  const trimmed = rawArguments.trim();
+  if (!trimmed) return {};
+
+  const candidates = [trimmed, trimmed.replace(/,\s*([}\]])/g, '$1')];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      const normalized = normalizeToolArguments(parsed);
+      if (normalized) {
+        return normalized;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error('Tool arguments are not valid JSON.');
 }
 
 async function streamAssistantTurn(params: {
@@ -316,8 +359,8 @@ export const chatbotRouter = createTRPCRouter({
         const flushContent = async (nextContent: string, force: boolean) => {
           if (nextContent === persistedContent) return;
           const now = Date.now();
-          const reachedInterval = now - lastFlushAt >= 220;
-          const reachedCharDelta = nextContent.length - persistedContent.length >= 36;
+          const reachedInterval = now - lastFlushAt >= 100;
+          const reachedCharDelta = nextContent.length - persistedContent.length >= 20;
           if (!force && !reachedInterval && !reachedCharDelta) return;
 
           await prisma.chatbotMessage.update({
@@ -359,21 +402,29 @@ export const chatbotRouter = createTRPCRouter({
 
           for (const tc of streamedTurn.toolCalls) {
             if (tc.type !== 'function') continue;
-            let parsedArgs: unknown = {};
+
+            let toolText = '';
+            let parsedArgs: Record<string, unknown>;
             try {
-              parsedArgs = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
-            } catch {
-              parsedArgs = {};
-            }
-            let toolText: string;
-            try {
-              toolText = await callMcpTool(tc.function.name, parsedArgs);
+              parsedArgs = parseToolArguments(tc.function.arguments ?? '{}');
             } catch (err) {
-              toolText = `Error calling tool ${tc.function.name}: ${
+              toolText = `Error parsing arguments for tool ${tc.function.name}: ${
                 err instanceof Error ? err.message : String(err)
               }`;
-              await resetMcpClient();
+              parsedArgs = {};
             }
+
+            if (!toolText) {
+              try {
+                toolText = await callMcpTool(tc.function.name, parsedArgs);
+              } catch (err) {
+                toolText = `Error calling tool ${tc.function.name}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`;
+                await resetMcpClient();
+              }
+            }
+
             await prisma.chatbotMessage.create({
               data: {
                 sessionId: session.id,

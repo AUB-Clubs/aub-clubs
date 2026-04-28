@@ -1,15 +1,12 @@
 import { z } from 'zod';
 import { query } from '../db.js';
-
-const ClubType = z.enum([
-  'ACADEMIC', 'ARTS', 'BUSINESS', 'CAREER', 'CULTURAL', 'GAMING', 'MEDIA',
-  'SPORTS', 'SOCIAL', 'TECHNOLOGY', 'COMMUNITY_SERVICE', 'ENVIRONMENTAL',
-  'HEALTH_WELLNESS', 'RELIGIOUS', 'BEGINNER_FRIENDLY', 'COMPETITIVE', 'NETWORKING',
-]);
+import { ClubType, normalizeClubTypeFilters } from './clubTypes.js';
 
 export const listClubsInput = {
   query: z.string().optional().describe('Free-text search across club title, description, and mission (case-insensitive).'),
-  types: z.array(ClubType).optional().describe('Filter to clubs that have ANY of the listed types.'),
+  types: z.array(ClubType).optional().describe('Filter to clubs that have ANY of the listed categories/types.'),
+  categories: z.array(ClubType).optional().describe('Alias for "types". Filter by club category values.'),
+  category: z.union([ClubType, z.array(ClubType)]).optional().describe('Alias for "types". Accepts one category or a list.'),
   limit: z.number().int().min(1).max(50).optional().default(10).describe('Max results (1-50, default 10).'),
 };
 
@@ -28,7 +25,8 @@ const ClubRow = z.object({
 type ClubRow = z.infer<typeof ClubRow>;
 
 export async function listClubs(args: z.infer<typeof inputSchema>) {
-  const { query: q, types, limit = 10 } = args;
+  const { query: q, types, categories, category, limit = 10 } = args;
+  const normalizedTypes = normalizeClubTypeFilters({ types, categories, category });
   const params: unknown[] = [];
   const where: string[] = [`c.status <> 'INACTIVE'`];
 
@@ -37,8 +35,8 @@ export async function listClubs(args: z.infer<typeof inputSchema>) {
     const i = params.length;
     where.push(`(c.title ILIKE $${i} OR c.description ILIKE $${i} OR c.mission ILIKE $${i})`);
   }
-  if (types && types.length > 0) {
-    params.push(types);
+  if (normalizedTypes.length > 0) {
+    params.push(normalizedTypes);
     where.push(`c.types && $${params.length}::"ClubType"[]`);
   }
   params.push(limit);

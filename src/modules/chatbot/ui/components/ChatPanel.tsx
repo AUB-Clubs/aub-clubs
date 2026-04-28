@@ -8,58 +8,90 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { renderMarkdownToHtml } from '@/lib/markdown';
 import { trpc } from '@/trpc/client';
 
 type View = 'sessions' | 'chat';
 
 type ChatMessage = {
   id: string;
-  role: 'USER' | 'ASSISTANT' | 'TOOL';
+  role: string;
   content: string | null;
   toolCalls?: unknown;
   toolName?: string | null;
 };
 
-type PendingUserMessage = {
-  sessionId: string;
-  content: string;
-} | null;
-
 type ChatPanelProps = {
   onClose?: () => void;
 };
 
+type MessageRole = 'USER' | 'ASSISTANT' | 'TOOL';
+
+function normalizeRole(role: string | null | undefined): MessageRole {
+  const normalized = (role ?? '').toUpperCase();
+  if (normalized === 'USER' || normalized === 'ASSISTANT' || normalized === 'TOOL') {
+    return normalized;
+  }
+  return 'ASSISTANT';
+}
+
 function MessageBubble({ role, content }: { role: string; content: string }) {
-  const isUser = role === 'USER';
+  const isUser = normalizeRole(role) === 'USER';
+
+  const markdownClassName =
+    'text-sm leading-relaxed break-words [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc [&_ul]:space-y-1';
+
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words',
+          'max-w-[82%] rounded-2xl px-3 py-2 break-words',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-foreground',
         )}
       >
-        {content}
+        {isUser ? (
+          <span className="text-sm leading-relaxed whitespace-pre-wrap">{content}</span>
+        ) : (
+          <article
+            className={markdownClassName}
+            dangerouslySetInnerHTML={{ __html: renderMarkdownToHtml(content) }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 function getToolNames(toolCalls: unknown): string[] {
-  if (!Array.isArray(toolCalls)) {
-    return [];
-  }
-
+  const calls = Array.isArray(toolCalls)
+    ? toolCalls
+    : typeof toolCalls === 'object' && toolCalls !== null
+      ? Array.isArray(Reflect.get(toolCalls, 'calls'))
+        ? (Reflect.get(toolCalls, 'calls') as unknown[])
+        : Object.values(toolCalls as Record<string, unknown>)
+      : [];
   const names: string[] = [];
-  for (const call of toolCalls) {
+  for (const call of calls) {
     if (typeof call !== 'object' || call === null) {
       continue;
     }
 
+    const directName = Reflect.get(call, 'name');
+    if (typeof directName === 'string' && directName.trim().length > 0) {
+      names.push(directName);
+      continue;
+    }
+
+    const alternateName = Reflect.get(call, 'toolName');
+    if (typeof alternateName === 'string' && alternateName.trim().length > 0) {
+      names.push(alternateName);
+      continue;
+    }
+
     const type = Reflect.get(call, 'type');
-    if (type !== 'function') {
+    if (typeof type === 'string' && type !== 'function') {
       continue;
     }
 
@@ -74,7 +106,7 @@ function getToolNames(toolCalls: unknown): string[] {
     }
   }
 
-  return names;
+  return [...new Set(names)];
 }
 
 function formatToolContent(content: string | null) {
@@ -100,13 +132,16 @@ function ToolInvocationBubble({ toolNames }: { toolNames: string[] }) {
 
   return (
     <div className="flex w-full min-w-0 justify-start">
-      <div className="w-[92%] min-w-0 rounded-xl border bg-muted/20 px-3 py-1.5">
-        <div className="flex h-8 items-center gap-2 text-xs">
-          <Badge variant="outline" className="h-6 gap-1 shrink-0">
+      <div className="max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2">
+        <div className="flex min-w-0 items-start gap-2 text-xs">
+          <Badge
+            variant="outline"
+            className="h-auto shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium overflow-visible"
+          >
             <Wrench className="size-3" />
             Tool call
           </Badge>
-          <span className="min-w-0 flex-1 truncate text-muted-foreground whitespace-nowrap">
+          <span className="min-w-0 flex-1 truncate text-muted-foreground leading-5">
             {toolList}
           </span>
         </div>
@@ -122,13 +157,16 @@ function ToolResultBubble({ toolName, content }: { toolName?: string | null; con
 
   return (
     <div className="flex w-full min-w-0 justify-start">
-      <details className="group w-[92%] min-w-0 rounded-xl border bg-muted/20 px-3 py-1.5 text-xs">
-        <summary className="flex h-8 cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-          <Badge variant="secondary" className="h-6 gap-1 max-w-40 shrink-0">
+      <details className="group max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2 text-xs">
+        <summary className="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
+          <Badge
+            variant="secondary"
+            className="h-auto max-w-56 shrink-0 rounded-md px-2 py-0.5 overflow-visible"
+          >
             <Wrench className="size-3" />
             <span className="truncate">{toolName ?? 'tool'}</span>
           </Badge>
-          <span className="min-w-0 flex-1 truncate text-muted-foreground whitespace-nowrap">
+          <span className="min-w-0 flex-1 truncate text-muted-foreground leading-5">
             {preview || 'Tool returned no output.'}
           </span>
         </summary>
@@ -167,9 +205,9 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   });
   const [draft, setDraft] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isSending = useRef(false);
+  const [pendingMsg, setPendingMsg] = useState<ChatMessage | null>(null);
 
   const sessionsQuery = trpc.chatbot.listSessions.useQuery();
 
@@ -177,7 +215,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     { sessionId: activeSessionId! },
     {
       enabled: !!activeSessionId,
-      refetchInterval: isStreaming ? 300 : false,
+      refetchInterval: isStreaming ? 150 : false,
       refetchIntervalInBackground: true,
     },
   );
@@ -198,16 +236,15 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   });
 
   const sendMessage = trpc.chatbot.sendMessage.useMutation({
-    onSuccess: (_data, variables) => {
-      void utils.chatbot.getSession.invalidate({ sessionId: variables.sessionId });
+    onSuccess: (_data, { sessionId }) => {
+      setPendingMsg(null);
+      void utils.chatbot.getSession.invalidate({ sessionId });
       void utils.chatbot.listSessions.invalidate();
-      setPendingUserMessage((current) =>
-        current?.sessionId === variables.sessionId ? null : current);
       setIsStreaming(false);
       isSending.current = false;
     },
     onError: () => {
-      setPendingUserMessage(null);
+      setPendingMsg(null);
       setIsStreaming(false);
       isSending.current = false;
     },
@@ -226,7 +263,13 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   }, []);
 
   const queueSend = useCallback((sessionId: string, content: string) => {
-    setPendingUserMessage({ sessionId, content });
+    setPendingMsg({
+      id: 'pending-user-message',
+      role: 'USER',
+      content,
+      toolName: null,
+      toolCalls: null,
+    });
     setIsStreaming(true);
     void utils.chatbot.getSession.invalidate({ sessionId });
     sendMessage.mutate({ sessionId, content });
@@ -249,7 +292,6 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     } catch {
       isSending.current = false;
       setIsStreaming(false);
-      setPendingUserMessage(null);
     }
   }, [draft, activeSessionId, queueSend, createSession]);
 
@@ -261,24 +303,18 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   };
 
   const dbMessages = (sessionQuery.data?.messages ?? []) as ChatMessage[];
-  const pendingForCurrentSession = pendingUserMessage?.sessionId === activeSessionId
-    ? pendingUserMessage
-    : null;
-  const pendingAlreadyPersisted = pendingForCurrentSession
-    ? dbMessages.some((m) => m.role === 'USER' && (m.content ?? '') === pendingForCurrentSession.content)
-    : false;
-  const visibleMessages: ChatMessage[] = pendingForCurrentSession && !pendingAlreadyPersisted
-    ? [
-      ...dbMessages,
-      {
-        id: 'pending-user-message',
-        role: 'USER',
-        content: pendingForCurrentSession.content,
-        toolName: null,
-        toolCalls: null,
-      },
-    ]
-    : dbMessages;
+  const pendingInDb = pendingMsg
+    && dbMessages.some(
+      (m) => normalizeRole(m.role) === 'USER'
+        && (m.content ?? '') === pendingMsg.content,
+    );
+  const visibleMessages = pendingMsg && !pendingInDb ? [...dbMessages, pendingMsg] : dbMessages;
+
+  useEffect(() => {
+    if (pendingInDb) {
+      setPendingMsg(null);
+    }
+  }, [pendingInDb]);
 
   const isBusy = sendMessage.isPending || createSession.isPending;
 
@@ -404,7 +440,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
       <ScrollArea className="flex-1 min-w-0 px-3 py-3">
         <div className="space-y-3 min-w-0">
-          {sessionQuery.isLoading && !pendingForCurrentSession ? (
+          {sessionQuery.isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-3/4 rounded-2xl" />
               <Skeleton className="h-8 w-1/2 rounded-2xl ml-auto" />
@@ -415,7 +451,9 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             </p>
           ) : (
             visibleMessages.map((m) => {
-              if (m.role === 'TOOL') {
+              const normalizedRole = normalizeRole(m.role);
+
+              if (normalizedRole === 'TOOL') {
                 return (
                   <ToolResultBubble
                     key={m.id}
@@ -425,15 +463,27 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                 );
               }
 
-              if (m.role === 'ASSISTANT' && !(m.content ?? '').trim()) {
+              if (normalizedRole === 'ASSISTANT') {
                 const toolNames = getToolNames(m.toolCalls);
+                const hasContent = (m.content ?? '').trim().length > 0;
+
+                if (toolNames.length > 0 && hasContent) {
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <ToolInvocationBubble toolNames={toolNames} />
+                      <MessageBubble role={normalizedRole} content={m.content ?? ''} />
+                    </div>
+                  );
+                }
+
                 if (toolNames.length > 0) {
                   return <ToolInvocationBubble key={`${m.id}-tools`} toolNames={toolNames} />;
                 }
-                return null;
+
+                if (!hasContent) return null;
               }
 
-              return <MessageBubble key={m.id} role={m.role} content={m.content ?? ''} />;
+              return <MessageBubble key={m.id} role={normalizedRole} content={m.content ?? ''} />;
             })
           )}
           {isStreaming && <TypingIndicator />}
