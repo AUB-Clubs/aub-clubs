@@ -40,7 +40,7 @@ export async function getClub(args: z.infer<typeof inputSchema>) {
 
   const sql = `
     SELECT
-      c.id, c.crn, c.title, c.description, c.status, c.mission, c.types,
+      c.id, c.crn, c.title, c.description, c.status, c.mission, c.types::text[] AS types,
       c.image_url AS "imageUrl",
       c.banner_url AS "bannerUrl",
       c.instagram_url AS "instagramUrl",

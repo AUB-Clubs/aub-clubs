@@ -43,7 +43,7 @@ export async function listClubs(args: z.infer<typeof inputSchema>) {
   const limitParam = params.length;
 
   const sql = `
-    SELECT c.id, c.crn, c.title, c.description, c.status, c.types, c.image_url AS "imageUrl",
+    SELECT c.id, c.crn, c.title, c.description, c.status, c.types::text[] AS types, c.image_url AS "imageUrl",
            COALESCE((
              SELECT COUNT(*)::int FROM memberships m
              WHERE m.club_id = c.id AND m.status = 'ACCEPTED'
