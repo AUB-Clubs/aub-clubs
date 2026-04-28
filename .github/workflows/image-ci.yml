@@ -38,12 +38,19 @@ jobs:
         include:
           - image: hamzarach69/aub-clubs-next
             dockerfile: Dockerfile
+            context: .
           - image: hamzarach69/aub-clubs-migrate
             dockerfile: Dockerfile.migrate
+            context: .
           - image: hamzarach69/aub-clubs-seed
             dockerfile: Dockerfile.seed
+            context: .
           - image: hamzarach69/aub-clubs-inference
             dockerfile: Dockerfile.inference
+            context: .
+          - image: hamzarach69/aub-clubs-mcp-server
+            dockerfile: mcp-server/Dockerfile
+            context: mcp-server
 
     steps:
       - name: Checkout
@@ -66,7 +73,7 @@ jobs:
           IMAGE_TAG: ${{ needs.generate-image-tag.outputs.image_tag }}
         run: |
           chmod +x operations/build_image.sh
-          ./operations/build_image.sh "${{ matrix.image }}" "${IMAGE_TAG}" "${{ matrix.dockerfile }}"
+          ./operations/build_image.sh "${{ matrix.image }}" "${IMAGE_TAG}" "${{ matrix.dockerfile }}" "${{ matrix.context }}"
 
   update-tags:
     runs-on: ubuntu-latest

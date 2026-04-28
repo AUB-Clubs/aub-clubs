@@ -1,5 +1,7 @@
 deployments:
-  - include: postgres
+  - path: runtime-secrets/manifests
+    waitReadiness: true
   - barrier: true
   - include: next-app
   - include: inference
+  - include: mcp-server

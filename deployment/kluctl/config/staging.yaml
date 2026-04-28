@@ -1,2 +1,5 @@
 sharedVars:
   hostName: "staging.aubclubs.com"
+  gcpProjectId: "project-b2a5c546-f972-43e5-954"
+  externalSecretsGcpServiceAccount: "aub-clubs-external-secrets@project-b2a5c546-f972-43e5-954.iam.gserviceaccount.com"
+  secretManagerEnvSecretName: "aub-clubs-staging-env"

@@ -1,4 +1,6 @@
 deployments:
   - path: traefik
-  - path: cloudnative-pg
+  - path: external-secrets
     waitReadiness: true
+  - barrier: true
+  - path: secret-store
