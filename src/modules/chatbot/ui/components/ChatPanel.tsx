@@ -79,10 +79,10 @@ function MessageBubble({ role, content, isStreaming }: { role: string; content: 
     'text-sm leading-relaxed break-words [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:leading-relaxed [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc [&_ul]:space-y-1';
 
   return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[82%] rounded-2xl px-3 py-2 break-words',
+          'max-w-[82%] min-w-0 rounded-2xl px-3 py-2 break-words',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-foreground',
@@ -171,14 +171,14 @@ function ToolInvocationBubble({ toolNames }: { toolNames: string[] }) {
 
   return (
     <div className="flex w-full min-w-0 justify-start">
-      <div className="max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2">
+      <div className="max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2 overflow-hidden">
         <div className="flex min-w-0 items-start gap-2 text-xs">
           <Badge
             variant="outline"
-            className="h-auto shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium overflow-visible"
+            className="h-auto shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium overflow-hidden"
           >
-            <Wrench className="size-3" />
-            Tool call
+            <Wrench className="size-3 shrink-0" />
+            <span className="whitespace-nowrap">Tool call</span>
           </Badge>
           <span className="min-w-0 flex-1 truncate text-muted-foreground leading-5">
             {toolList}
@@ -196,13 +196,13 @@ function ToolResultBubble({ toolName, content }: { toolName?: string | null; con
 
   return (
     <div className="flex w-full min-w-0 justify-start">
-      <details className="group max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2 text-xs">
+      <details className="group max-w-[92%] min-w-0 rounded-lg border bg-muted/25 px-3 py-2 text-xs overflow-hidden">
         <summary className="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
           <Badge
             variant="secondary"
-            className="h-auto max-w-56 shrink-0 rounded-md px-2 py-0.5 overflow-visible"
+            className="h-auto max-w-56 shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5 overflow-hidden"
           >
-            <Wrench className="size-3" />
+            <Wrench className="size-3 shrink-0" />
             <span className="truncate">{toolName ?? 'tool'}</span>
           </Badge>
           <span className="min-w-0 flex-1 truncate text-muted-foreground leading-5">
@@ -488,7 +488,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
       </div>
 
       <ScrollArea className="flex-1 min-w-0 min-h-0 px-3 py-3">
-        <div className="space-y-3 min-w-0">
+        <div className="space-y-3 min-w-0 w-full pb-4">
           {sessionQuery.isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-3/4 rounded-2xl" />
