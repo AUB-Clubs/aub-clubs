@@ -207,7 +207,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isSending = useRef(false);
-  const [pendingMsg, setPendingMsg] = useState<ChatMessage | null>(null);
+  const [pendingMsg, setPendingMsg] = useState<{ msg: ChatMessage, minCount: number } | null>(null);
 
   const sessionsQuery = trpc.chatbot.listSessions.useQuery();
 
@@ -215,7 +215,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     { sessionId: activeSessionId! },
     {
       enabled: !!activeSessionId,
-      refetchInterval: isStreaming ? 150 : false,
+      refetchInterval: isStreaming ? 1000 : false,
       refetchIntervalInBackground: true,
     },
   );
@@ -264,16 +264,19 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
 
   const queueSend = useCallback((sessionId: string, content: string) => {
     setPendingMsg({
-      id: 'pending-user-message',
-      role: 'USER',
-      content,
-      toolName: null,
-      toolCalls: null,
+      msg: {
+        id: 'pending-user-message',
+        role: 'USER',
+        content,
+        toolName: null,
+        toolCalls: null,
+      },
+      minCount: (sessionQuery.data?.messages ?? []).length + 1,
     });
     setIsStreaming(true);
     void utils.chatbot.getSession.invalidate({ sessionId });
     sendMessage.mutate({ sessionId, content });
-  }, [sendMessage, utils]);
+  }, [sendMessage, utils, sessionQuery.data?.messages]);
 
   const handleSend = useCallback(async () => {
     const content = draft.trim();
@@ -303,18 +306,16 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   };
 
   const dbMessages = (sessionQuery.data?.messages ?? []) as ChatMessage[];
-  const pendingInDb = pendingMsg
-    && dbMessages.some(
-      (m) => normalizeRole(m.role) === 'USER'
-        && (m.content ?? '') === pendingMsg.content,
-    );
-  const visibleMessages = pendingMsg && !pendingInDb ? [...dbMessages, pendingMsg] : dbMessages;
+  
+  // If we have a pending message, check if the DB has caught up.
+  // We expect the DB to have at least `minCount` messages once the user message is saved.
+  const pendingInDb = pendingMsg && dbMessages.length >= pendingMsg.minCount;
 
-  useEffect(() => {
-    if (pendingInDb) {
-      setPendingMsg(null);
-    }
-  }, [pendingInDb]);
+  const visibleMessages = pendingMsg && !pendingInDb 
+    ? [...dbMessages, pendingMsg.msg] 
+    : dbMessages;
+
+
 
   const isBusy = sendMessage.isPending || createSession.isPending;
 
