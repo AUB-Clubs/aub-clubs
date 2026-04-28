@@ -31,7 +31,7 @@ export function FloatingChatBubble() {
           <SheetHeader className="sr-only">
             <SheetTitle>Club Assistant</SheetTitle>
           </SheetHeader>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <ChatPanel onClose={() => setOpen(false)} />
           </div>
         </SheetContent>
