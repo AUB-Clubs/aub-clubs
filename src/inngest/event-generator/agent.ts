@@ -13,7 +13,7 @@ export function createEventGeneratorAgent(systemPrompt: string) {
     name: "event-generator-agent",
     description: "An expert AUB club event planning agent",
     system: systemPrompt,
-    model: openai({ model: "gpt-5.4" }),
+    model: openai({ model: "gpt-5.5" }),
     tools: Object.values(tools),
     lifecycle: {
       onResponse: async ({ result, network }) => {
