@@ -80,13 +80,15 @@ Install Playwright browsers once:
 npx playwright install --with-deps chromium
 ```
 
-Set the following variables in `.env` for local E2E runs:
+For local E2E runs, Playwright injects safe defaults automatically:
 
 ```env
 E2E_TEST_MODE=true
 E2E_AUTH_SECRET=local-e2e-secret
 E2E_AUTH_USER_ID=00000000-0000-4000-8000-000000000001
 ```
+
+You only need to set these in `.env` if you want to override the defaults.
 
 Then run:
 
