@@ -26,7 +26,7 @@ export function FloatingChatBubble() {
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="w-full sm:w-96 p-0 flex flex-col"
+          className="w-full p-0 flex flex-col sm:w-[32rem] sm:max-w-[32rem]"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Club Assistant</SheetTitle>
