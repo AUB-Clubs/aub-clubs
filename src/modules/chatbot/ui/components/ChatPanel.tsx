@@ -165,29 +165,6 @@ function toSingleLine(text: string) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-function ToolInvocationBubble({ toolNames }: { toolNames: string[] }) {
-  if (toolNames.length === 0) return null;
-  const toolList = toSingleLine(toolNames.join(', '));
-
-  return (
-    <div className="flex w-full justify-start">
-      <div className="max-w-[92%] rounded-lg border bg-muted/25 px-3 py-2">
-        <div className="flex items-start gap-2 text-xs">
-          <Badge
-            variant="outline"
-            className="h-auto shrink-0 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium"
-          >
-            <Wrench className="size-3 shrink-0" />
-            <span className="whitespace-nowrap">Tool call</span>
-          </Badge>
-          <span className="flex-1 text-muted-foreground leading-5 break-all">
-            {toolList}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ToolResultBubble({ toolName, content }: { toolName?: string | null; content: string | null }) {
   const formatted = formatToolContent(content);
@@ -519,21 +496,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
               }
 
               if (normalizedRole === 'ASSISTANT') {
-                const toolNames = getToolNames(m.toolCalls);
                 const hasContent = (m.content ?? '').trim().length > 0;
-
-                if (toolNames.length > 0 && hasContent) {
-                  return (
-                    <div key={m.id} className="space-y-2">
-                      <ToolInvocationBubble toolNames={toolNames} />
-                      <MessageBubble role={normalizedRole} content={m.content ?? ''} isStreaming={isCurrentlyStreaming} />
-                    </div>
-                  );
-                }
-
-                if (toolNames.length > 0) {
-                  return <ToolInvocationBubble key={`${m.id}-tools`} toolNames={toolNames} />;
-                }
 
                 if (!hasContent) return null;
               }
