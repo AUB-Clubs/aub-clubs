@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: seed
-          image: hamzarach69/aub-clubs-seed:2211b75
+          image: hamzarach69/aub-clubs-seed:b8ec74c
           envFrom:
             - secretRef:
                 name: aub-clubs-runtime-secrets
