@@ -4,6 +4,8 @@ import path from 'path';
 import type { ClubType } from '../src/generated/prisma';
 
 const FALLBACK_AUTHOR_EMAIL = 'seed-author@aub.test';
+const DEFAULT_E2E_USER_ID = "00000000-0000-4000-8000-000000000001";
+const E2E_USER_EMAIL = "e2e-user@aub.test";
 const TOTAL_POSTS = 100;
 const TARGET_CLUB_COUNT = 40;
 
@@ -139,6 +141,33 @@ async function ensureAuthorPool() {
   return [fallback];
 }
 
+async function ensureE2EUser() {
+  const e2eUserId = process.env.E2E_AUTH_USER_ID ?? DEFAULT_E2E_USER_ID;
+
+  await prisma.user.upsert({
+    where: { id: e2eUserId },
+    update: {
+      email: E2E_USER_EMAIL,
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: "E2E",
+      lastName: "User",
+      major: "Computer Science",
+      year: 2,
+    },
+    create: {
+      id: e2eUserId,
+      email: E2E_USER_EMAIL,
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: "E2E",
+      lastName: "User",
+      major: "Computer Science",
+      year: 2,
+    },
+  });
+}
+
 async function main() {
   console.log('Start seeding ...');
 
@@ -168,6 +197,7 @@ async function main() {
   }
   console.log(`Created ${clubs.length} clubs.`);
 
+  await ensureE2EUser();
   const authorPool = await ensureAuthorPool();
   const clubsForPosts = clubs.slice(0, Math.min(TARGET_CLUB_COUNT, clubs.length));
 
