@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { keepPreviousData } from '@tanstack/react-query'
 import { trpc } from '@/trpc/client'
 import {
   Card,
@@ -50,6 +51,19 @@ function getInitials(firstName?: string | null, lastName?: string | null) {
 export default function StudentPage() {
   const profileQuery = trpc.profile.get.useQuery()
   const profile = profileQuery.data
+  const clubsLimit = 5
+  const [clubsPage, setClubsPage] = useState(1)
+
+  const clubsQuery = trpc.profile.getRegisteredClubs.useQuery(
+    {
+      page: clubsPage,
+      limit: clubsLimit,
+    },
+    {
+      enabled: !!profile?.id,
+      placeholderData: keepPreviousData,
+    }
+  )
   
   const updateMutation = trpc.profile.update.useMutation()
   const [isEditing, setIsEditing] = useState(false)
@@ -107,6 +121,14 @@ export default function StudentPage() {
   }
 
   const isLoading = profileQuery.isLoading
+  const clubs = clubsQuery.data?.items ?? []
+  const clubsTotalPages = clubsQuery.data?.totalPages ?? 0
+  const clubsTotalCount = clubsQuery.data?.totalCount ?? 0
+  const isClubsLoading = clubsQuery.isLoading
+
+  useEffect(() => {
+    setClubsPage(1)
+  }, [profile?.id])
 
   return (
     <div className="w-full bg-background p-6">
@@ -351,10 +373,10 @@ export default function StudentPage() {
               </CardHeader>
               <TabsContent value="clubs" className="flex-1">
                 <CardContent className="space-y-4">
-                  {isLoading ? (
+                  {isLoading || isClubsLoading ? (
                     <div className="space-y-3">
                       <Skeleton className="h-5 w-36" />
-                      {[1, 2].map((i) => (
+                      {[1, 2, 3, 4, 5].map((i) => (
                         <div key={i} className="flex items-center gap-3 rounded-lg border bg-secondary/20 px-3 py-2">
                           <Skeleton className="size-9 rounded-full" />
                           <div className="flex-1 space-y-2">
@@ -364,9 +386,9 @@ export default function StudentPage() {
                         </div>
                       ))}
                     </div>
-                  ) : profile && profile.registered_clubs.length > 0 ? (
+                  ) : clubs.length > 0 ? (
                     <div className="space-y-3">
-                      {profile.registered_clubs.map((rc) => (
+                      {clubs.map((rc) => (
                         <Link
                           key={rc.club.id}
                           href={`/clubs/${rc.club.id}`}
@@ -396,6 +418,36 @@ export default function StudentPage() {
                           </Badge>
                         </Link>
                       ))}
+                      {clubsTotalPages > 1 ? (
+                        <div className="flex items-center justify-between gap-3 border-t border-secondary/30 pt-3">
+                          <p className="text-xs text-muted-foreground">
+                            Showing {(clubsPage - 1) * clubsLimit + 1}-{Math.min(clubsPage * clubsLimit, clubsTotalCount)} of {clubsTotalCount}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={clubsPage <= 1}
+                              onClick={() => setClubsPage((p) => Math.max(1, p - 1))}
+                            >
+                              Previous
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                              Page {clubsPage} / {clubsTotalPages}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={clubsPage >= clubsTotalPages}
+                              onClick={() => setClubsPage((p) => Math.min(clubsTotalPages, p + 1))}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <Empty className="py-6">

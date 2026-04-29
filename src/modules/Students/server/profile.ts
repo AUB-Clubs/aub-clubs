@@ -82,6 +82,58 @@ export const profileRouter = createTRPCRouter({
       };
     }),
 
+  getRegisteredClubs: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid().optional(),
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(50).default(5),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = input.userId ?? ctx.user.id;
+      const page = input.page;
+      const limit = input.limit;
+      const skip = (page - 1) * limit;
+
+      const [memberships, totalCount] = await Promise.all([
+        prisma.membership.findMany({
+          where: { userId },
+          take: limit,
+          skip,
+          orderBy: { joinedAt: 'desc' },
+          select: {
+            role: true,
+            club: {
+              select: {
+                id: true,
+                title: true,
+                crn: true,
+                imageUrl: true,
+              },
+            },
+          },
+        }),
+        prisma.membership.count({ where: { userId } }),
+      ]);
+
+      return {
+        items: memberships.map((m) => ({
+          role: m.role,
+          club: {
+            id: m.club.id,
+            Title: m.club.title,
+            CRN: m.club.crn,
+            image: m.club.imageUrl,
+          },
+        })),
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        page,
+        limit,
+      };
+    }),
+
   update: protectedProcedure
     .input(
       z.object({
