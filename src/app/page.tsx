@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/modules/auth/server/utils/supabase-server";
+import { LandingPageView } from "@/modules/landing/ui/views/landing-page-view";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -11,5 +12,5 @@ export default async function Home() {
     redirect("/discover");
   }
 
-  redirect("/auth");
+  return <LandingPageView />;
 }
