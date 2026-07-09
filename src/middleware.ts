@@ -17,14 +17,28 @@ import { getBypassUserIdFromRequest } from "@/modules/auth/server/utils/e2e-auth
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const bypassUserId = getBypassUserIdFromRequest(request);
-
   // Create a response that we can modify
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // PUBLIC ROUTES: Allow without authentication
+  // ─────────────────────────────────────────────────────────────────────
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/reset-password")
+  ) {
+    return response;
+  }
+
+  const bypassUserId = getBypassUserIdFromRequest(request);
+  if (bypassUserId) {
+    return response;
+  }
 
   // Create Supabase client for middleware
   const supabase = createServerClient(
@@ -52,40 +66,13 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Get authenticated user - use getUser() for security
-  // This authenticates the data by contacting the Supabase Auth server
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   // ─────────────────────────────────────────────────────────────────────
-  // PUBLIC ROUTES: Allow without authentication
-  // ─────────────────────────────────────────────────────────────────────
-  if (
-    pathname === "/" ||
-    pathname.startsWith("/auth") ||
-    pathname.startsWith("/reset-password")
-  ) {
-    // If user is fully authenticated and tries to access auth pages, redirect to /me
-    if (user && pathname.startsWith("/auth")) {
-      // Check if there's a verify query param - if so, let them through to see verification notice
-      const verifyParam = request.nextUrl.searchParams.get("verify");
-      if (!verifyParam) {
-        // Fetch user status to determine where to redirect
-        // We can't call tRPC here, so we'll let the auth page handle the redirect
-        // This is a soft redirect - the auth page will check status and redirect if needed
-      }
-    }
-    return response;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
   // PROTECTED ROUTES: Require authentication
   // ─────────────────────────────────────────────────────────────────────
-
-  if (bypassUserId) {
-    return response;
-  }
 
   // Not authenticated → redirect to /auth
   if (!user) {
