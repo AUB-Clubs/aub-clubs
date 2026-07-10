@@ -1,104 +1,183 @@
 import { prisma } from '../src/lib/prisma';
-import { ClubRole, PostType } from '../src/generated/prisma/enums';
-import { faker } from '@faker-js/faker';
 import fs from 'fs';
 import path from 'path';
+import type { ClubType } from '../src/generated/prisma';
+
+const FALLBACK_AUTHOR_EMAIL = 'seed-author@aub.test';
+const DEFAULT_E2E_USER_ID = "00000000-0000-4000-8000-000000000001";
+const E2E_USER_EMAIL = "e2e-user@aub.test";
+const TOTAL_POSTS = 100;
+const TARGET_CLUB_COUNT = 40;
+
+type SeedPost = {
+  title: string;
+  content: string;
+  type: 'ANNOUNCEMENT' | 'GENERAL';
+  status: 'PUBLISHED';
+  audience: 'PUBLIC';
+  priority: 'GENERAL' | 'IMPORTANT';
+  createdAt: Date;
+  clubId: string;
+  authorId: string;
+};
+
+const announcementTemplates = [
+  {
+    title: 'Clubs Fair Booth Volunteer Sign-Up',
+    content:
+      'OSA runs Clubs and Societies Fair each fall, so we are opening volunteer slots for booth setup, walk-up demos, and member onboarding coverage.',
+    priority: 'IMPORTANT' as const,
+  },
+  {
+    title: 'Cabinet Transition Prep (April Cycle)',
+    content:
+      'Cabinet transition activities start in April. We are collecting nominations, role preferences, and handover notes so incoming officers can onboard quickly.',
+    priority: 'GENERAL' as const,
+  },
+  {
+    title: 'New Member Orientation Week',
+    content:
+      'Orientation week includes a 30-minute intro to the club roadmap, communication channels, committee structure, and contribution tracks for first-year members.',
+    priority: 'GENERAL' as const,
+  },
+  {
+    title: 'Semester Projects: Call for Leads',
+    content:
+      'Project proposals are open. Submit a one-page plan with goals, timeline, and resource needs; leads will be selected based on feasibility and member interest.',
+    priority: 'IMPORTANT' as const,
+  },
+];
+
+const generalTemplates = [
+  {
+    title: 'Workshop Recap and Slide Deck',
+    content:
+      'Thanks to everyone who attended this week. We uploaded the slides, references, and practice tasks; comments are open for follow-up questions.',
+  },
+  {
+    title: 'Open Office Hours This Week',
+    content:
+      'Cabinet members will run office hours for member support on planning, logistics, and skill-building. Drop in for 10-15 minute discussions.',
+  },
+  {
+    title: 'Collaboration Thread: Ideas Needed',
+    content:
+      'Use this thread to suggest cross-club collaborations. We are especially looking for projects that combine technical depth with community impact.',
+  },
+  {
+    title: 'Member Spotlight',
+    content:
+      'This week we are highlighting members who contributed to event operations, content creation, and outreach. Thank you for keeping momentum high.',
+  },
+  {
+    title: 'Weekly Progress Check-In',
+    content:
+      'Share blockers, wins, and what you plan to complete next week. Keeping updates concise helps committee leads unblock work quickly.',
+  },
+];
+
+const worldAnchors = {
+  worldOceansDay: 'World Oceans Day is observed annually on June 8.',
+  coastalCleanup: 'International Coastal Cleanup events are organized globally in September.',
+  ieeeDay: 'IEEE Day is observed on the first Tuesday of October.',
+  ieeextreme: 'IEEEXtreme is a 24-hour programming competition with teams of 1-3 IEEE student members.',
+};
+
+function typeSpecificLine(types: ClubType[], clubTitle: string): string {
+  if (types.includes('TECHNOLOGY')) {
+    return `${worldAnchors.ieeextreme} ${clubTitle} members can join prep circles for problem-solving and team matching.`;
+  }
+  if (types.includes('ENVIRONMENTAL')) {
+    return `${worldAnchors.worldOceansDay} ${worldAnchors.coastalCleanup} We are aligning our field activities and data collection around those calendars.`;
+  }
+  if (types.includes('BUSINESS')) {
+    return 'This cycle focuses on case practice, industry exposure, and practical portfolio projects members can present at interviews.';
+  }
+  if (types.includes('HEALTH_WELLNESS')) {
+    return 'We are prioritizing evidence-based sessions, peer support, and accessible participation formats for all members.';
+  }
+  if (types.includes('ARTS')) {
+    return 'This cycle emphasizes production quality, rehearsal discipline, and public showcases with clear creative direction.';
+  }
+  if (types.includes('CULTURAL')) {
+    return 'Expect culture-focused programming with inclusive participation, historical context, and community storytelling.';
+  }
+  if (types.includes('SPORTS')) {
+    return 'Training sessions will follow progressive difficulty with attendance tracking and peer coaching rotations.';
+  }
+  if (types.includes('ACADEMIC')) {
+    return 'Academic tracks include peer tutoring, topic circles, and short applied sessions tied to course outcomes.';
+  }
+  if (types.includes('MEDIA')) {
+    return 'Media teams are running story-pitch pipelines, editing reviews, and publishing schedules with clear deadlines.';
+  }
+  return 'We are structuring weekly activities around practical learning, member retention, and measurable outcomes.';
+}
+
+async function ensureAuthorPool() {
+  const existingUsers = await prisma.user.findMany({
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+    take: 12,
+  });
+
+  if (existingUsers.length > 0) return existingUsers;
+
+  const fallback = await prisma.user.upsert({
+    where: { email: FALLBACK_AUTHOR_EMAIL },
+    update: {},
+    create: {
+      email: FALLBACK_AUTHOR_EMAIL,
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: 'Seed',
+      lastName: 'Author',
+      major: 'Undeclared',
+      year: 1,
+    },
+    select: { id: true },
+  });
+
+  return [fallback];
+}
+
+async function ensureE2EUser() {
+  const e2eUserId = process.env.E2E_AUTH_USER_ID ?? DEFAULT_E2E_USER_ID;
+
+  await prisma.user.upsert({
+    where: { id: e2eUserId },
+    update: {
+      email: E2E_USER_EMAIL,
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: "E2E",
+      lastName: "User",
+      major: "Computer Science",
+      year: 2,
+    },
+    create: {
+      id: e2eUserId,
+      email: E2E_USER_EMAIL,
+      emailVerified: true,
+      onboardingCompleted: true,
+      firstName: "E2E",
+      lastName: "User",
+      major: "Computer Science",
+      year: 2,
+    },
+  });
+}
 
 async function main() {
   console.log('Start seeding ...');
 
-  // CLEANUP
-  await prisma.upvote.deleteMany();
-  await prisma.postImage.deleteMany();
-  await prisma.post.deleteMany();
+  // Keep users intact. Only reset memberships and clubs.
   await prisma.membership.deleteMany();
   await prisma.club.deleteMany();
-  await prisma.user.deleteMany();
+  console.log('Existing memberships and clubs deleted.');
 
-  console.log('Database cleaned.');
-
-  // --- 100 USERS ---
-  const users = [];
-
-  // Create 3 specific users (Alice, Bob, Charlie) first for deterministic testing
-  const staticUsersData = [
-    {
-      id: "0000",
-      aubnetId: 10001,
-      email: 'alice@aub.edu.lb',
-      firstName: 'Alice',
-      lastName: 'Wonderland',
-      dob: new Date('2003-01-01'),
-      major: 'Computer Science',
-      year: 3,
-      bio: "I love exploring datasabses and wonderland",
-      avatarUrl: faker.image.avatar(),
-    },
-    {
-      id: "0001",
-      aubnetId: 10002,
-      email: 'bob@aub.edu.lb',
-      firstName: 'Bob',
-      lastName: 'Builder',
-      dob: new Date('2002-05-20'),
-      major: 'Civil Engineering',
-      year: 4,
-      bio: "Can we fix it? Yes we can!",
-      avatarUrl: faker.image.avatar(),
-    },
-    {
-      id: "0002",
-      aubnetId: 10003,
-      email: 'charlie@aub.edu.lb',
-      firstName: 'Charlie',
-      lastName: 'Chaplin',
-      dob: new Date('2001-12-25'),
-      major: 'Performing Arts',
-      year: 2,
-      bio: "Silent but funny",
-      avatarUrl: faker.image.avatar(),
-    }
-  ];
-
-  for (const userData of staticUsersData) {
-    const user = await prisma.user.create({ data: userData });
-    users.push(user);
-  }
-
-  // Define majors for random picking
-  const majors = ['Computer Science', 'Business', 'Engineering', 'Psychology', 'Economics', 'Biology', 'Nursing', 'Architecture'];
-
-  // Add remaining 97 random users
-  console.log('Generating random users...');
-  for (let i = 0; i < 97; i++) {
-    const firstName = faker.person.firstName();
-    const lastName = faker.person.lastName();
-    // Ensure unique email and AubnetID
-    const email = faker.internet.email({ firstName, lastName, provider: 'aub.edu.lb' });
-    const aubnetId = 20000 + i;
-
-    const user = await prisma.user.create({
-      data: {
-        id: faker.string.uuid(), // Generate a random UUID for Clerk User ID
-        aubnetId: aubnetId,
-        email: email,
-        firstName: firstName,
-        lastName: lastName,
-        dob: faker.date.birthdate({ min: 18, max: 25, mode: 'age' }),
-        bio: faker.person.bio(),
-        avatarUrl: faker.image.avatar(),
-        major: faker.helpers.arrayElement(majors),
-        year: faker.number.int({ min: 1, max: 5 }),
-      },
-    });
-    users.push(user);
-  }
-  console.log(`Created ${users.length} users.`);
-
-
-  // --- REAL CLUBS ---
   const clubs = [];
-  console.log('Generating real clubs from clubs.json...');
+  console.log('Generating clubs from clubs.json...');
 
   const clubsJsonPath = path.join(process.cwd(), 'clubs.json');
   const realClubsData = JSON.parse(fs.readFileSync(clubsJsonPath, 'utf8'));
@@ -112,165 +191,70 @@ async function main() {
         types: clubData.types,
         imageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(clubData.title)}&background=random`,
         bannerUrl: 'https://placehold.co/1200x300/png',
-      }
+      },
     });
     clubs.push(club);
   }
   console.log(`Created ${clubs.length} clubs.`);
 
+  await ensureE2EUser();
+  const authorPool = await ensureAuthorPool();
+  const clubsForPosts = clubs.slice(0, Math.min(TARGET_CLUB_COUNT, clubs.length));
 
-  // --- MEMBERSHIPS ---
-  console.log('Generating memberships...');
+  const now = new Date();
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const postsToSeed: SeedPost[] = [];
 
-  // Guarantee: user "0000" (Alice) is PRESIDENT of the first club
-  const demoClub = clubs[0];
-  const demoUser = users[0]; // Alice, id = "0000"
-  await prisma.membership.create({
-    data: {
-      userId: demoUser.id,
-      clubId: demoClub.id,
-      role: ClubRole.PRESIDENT,
-      status: 'ACCEPTED',
-    }
-  });
-  console.log(`Made "${demoUser.firstName}" president of "${demoClub.title}" for demo.`);
+  if (clubsForPosts.length > 0) {
+    const basePostsPerClub = Math.floor(TOTAL_POSTS / clubsForPosts.length);
+    const remainder = TOTAL_POSTS % clubsForPosts.length;
 
-  // Ensure every club has at least one President and some members
-  for (const club of clubs) {
-    // Skip demo club's president assignment (already done above)
-    if (club.id !== demoClub.id) {
-      const president = faker.helpers.arrayElement(users.filter(u => u.id !== demoUser.id));
+    clubsForPosts.forEach((club, clubIndex) => {
+      const count = basePostsPerClub + (clubIndex < remainder ? 1 : 0);
+      const clubContext = typeSpecificLine(club.types as ClubType[], club.title);
+      const author = authorPool[clubIndex % authorPool.length];
 
-      const existingPres = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: president.id, clubId: club.id } }
-      });
+      for (let i = 0; i < count; i += 1) {
+        const isAnnouncement = i % 3 === 0;
+        const cycle = Math.floor(i / 3) + 1;
 
-      if (!existingPres) {
-        await prisma.membership.create({
-          data: {
-            userId: president.id,
+        if (isAnnouncement) {
+          const tmpl = announcementTemplates[(clubIndex + i) % announcementTemplates.length];
+          postsToSeed.push({
             clubId: club.id,
-            role: ClubRole.PRESIDENT,
-            status: 'ACCEPTED',
-          }
-        });
-      }
-    }
-
-    // Add random number of members (5-20)
-    const numberOfMembers = faker.number.int({ min: 5, max: 20 });
-    const randomUsers = faker.helpers.arrayElements(users, numberOfMembers);
-
-    for (const member of randomUsers) {
-      // Skip if same as demo president for demo club
-      if (club.id === demoClub.id && member.id === demoUser.id) continue;
-
-      const existing = await prisma.membership.findUnique({
-        where: { userId_clubId: { userId: member.id, clubId: club.id } }
-      });
-
-      if (!existing) {
-        await prisma.membership.create({
-          data: {
-            userId: member.id,
+            authorId: author.id,
+            title: `${tmpl.title} - ${club.title}`,
+            content: `${tmpl.content} ${clubContext} Update cycle: ${cycle}.`,
+            type: 'ANNOUNCEMENT',
+            status: 'PUBLISHED',
+            audience: 'PUBLIC',
+            priority: tmpl.priority,
+            createdAt: daysAgo(clubIndex * 3 + i + 1),
+          });
+        } else {
+          const tmpl = generalTemplates[(clubIndex + i) % generalTemplates.length];
+          postsToSeed.push({
             clubId: club.id,
-            role: faker.helpers.arrayElement([ClubRole.MEMBER, ClubRole.VICE_PRESIDENT, ClubRole.MEMBER, ClubRole.MEMBER]),
-            status: 'ACCEPTED',
-          }
-        });
-      }
-    }
-  }
-
-  // --- DEMO: Pending join requests for Alice's club ---
-  console.log('Creating demo join requests...');
-  const existingDemoMembers = await prisma.membership.findMany({
-    where: { clubId: demoClub.id },
-    select: { userId: true },
-  });
-  const existingMemberIds = new Set(existingDemoMembers.map(m => m.userId));
-  const nonMembers = users.filter(u => !existingMemberIds.has(u.id));
-  const requesters = faker.helpers.arrayElements(nonMembers, Math.min(7, nonMembers.length));
-
-  for (const requester of requesters) {
-    await prisma.membership.create({
-      data: {
-        userId: requester.id,
-        clubId: demoClub.id,
-        status: 'PENDING',
-        role: ClubRole.MEMBER,
-      }
-    });
-  }
-  console.log(`Created ${requesters.length} pending join requests for "${demoClub.title}".`);
-
-  // --- DEMO: Draft announcements for Alice's club ---
-  console.log('Creating demo draft announcements...');
-  const draftAnnouncements = [
-    { title: 'Welcome Week Schedule', content: 'Join us for a series of events during welcome week! We have workshops, meetups, and social gatherings planned.', audience: 'PUBLIC' as const },
-    { title: 'Board Elections Coming Up', content: 'We will be holding elections for board positions next month. Stay tuned for nomination details.', audience: 'MEMBERS_ONLY' as const },
-    { title: 'Budget Meeting Notes', content: 'Internal notes from the last budget planning meeting. Please review before our next session.', audience: 'BOARD_ONLY' as const },
-  ];
-
-  for (const ann of draftAnnouncements) {
-    await prisma.post.create({
-      data: {
-        clubId: demoClub.id,
-        authorId: demoUser.id,
-        title: ann.title,
-        content: ann.content,
-        type: 'ANNOUNCEMENT',
-        status: 'DRAFT',
-        audience: ann.audience,
-      }
-    });
-  }
-  console.log(`Created ${draftAnnouncements.length} draft announcements for "${demoClub.title}".`);
-
-
-  // --- 200 POSTS ---
-  console.log('Generating posts...');
-  for (let i = 0; i < 200; i++) {
-    const club = faker.helpers.arrayElement(clubs);
-
-    // Get members of this club to be the author
-    const memberships = await prisma.membership.findMany({
-      where: { clubId: club.id },
-      include: { user: true } // get user details
-    });
-
-    if (memberships.length === 0) continue;
-
-    // Important: To generate posts we need an author who is a member.
-    // However, if we loop 200 times and do DB queries inside, it might be slow but it's fine for seeding 200 items.
-    const randomMember = faker.helpers.arrayElement(memberships).user;
-
-    const post = await prisma.post.create({
-      data: {
-        title: faker.lorem.sentence({ min: 3, max: 8 }),
-        content: faker.lorem.paragraphs({ min: 1, max: 3 }),
-        type: faker.helpers.arrayElement([PostType.ANNOUNCEMENT, PostType.GENERAL]),
-        clubId: club.id,
-        authorId: randomMember.id,
-        createdAt: faker.date.past() // Random date in the past
-      },
-    });
-
-    // Add some random upvotes (0-20)
-    const numUpvotes = faker.number.int({ min: 0, max: 20 });
-    const randomVoters = faker.helpers.arrayElements(users, numUpvotes);
-
-    for (const voter of randomVoters) {
-
-      await prisma.upvote.create({
-        data: {
-          userId: voter.id,
-          postId: post.id
+            authorId: author.id,
+            title: `${tmpl.title} - ${club.title}`,
+            content: `${tmpl.content} ${clubContext} Week ${cycle} notes posted for members.`,
+            type: 'GENERAL',
+            status: 'PUBLISHED',
+            audience: 'PUBLIC',
+            priority: 'GENERAL',
+            createdAt: daysAgo(clubIndex * 3 + i + 1),
+          });
         }
-      });
-    }
+      }
+    });
   }
-  console.log('Created 200 posts with random upvotes.');
+
+  if (postsToSeed.length > 0) {
+    await prisma.post.createMany({ data: postsToSeed });
+    console.log(`Seeded ${postsToSeed.length} published posts across ${clubsForPosts.length} clubs.`);
+  } else {
+    console.warn('No clubs found for post seeding.');
+  }
 
   console.log('Seeding finished.');
 }

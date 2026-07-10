@@ -5,7 +5,7 @@ deployments:
   - path: namespaces
   - barrier: true
   - include: third-party
-  - barrier: true # postgres depends on cloudnative-pg being installed
+  - barrier: true # runtime secrets depend on External Secrets being installed
   - include: services
 
 commonLabels:

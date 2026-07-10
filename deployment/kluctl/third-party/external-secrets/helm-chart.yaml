@@ -1,0 +1,7 @@
+helmChart:
+  repo: https://charts.external-secrets.io
+  chartName: external-secrets
+  chartVersion: 0.20.3
+  releaseName: external-secrets
+  namespace: external-secrets
+  output: helm-rendered.yaml

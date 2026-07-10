@@ -23,9 +23,21 @@ spec:
               value: "3000"
             - name: INFERENCE_URL
               value: "http://inference.aub-clubs.svc.cluster.local:8080"
+            - name: MCP_SERVER_URL
+              value: "http://mcp-server.aub-clubs.svc.cluster.local:8081"
+            - name: NEXT_PUBLIC_APP_URL
+              value: "https://{{ sharedVars.hostName }}"
+            - name: INNGEST_ENV
+              value: "{{ args.environment }}"
+            - name: INNGEST_SERVE_HOST
+              value: "https://{{ sharedVars.hostName }}"
+            - name: INNGEST_SERVE_PATH
+              value: "/api/inngest"
+            - name: INNGEST_LOG_LEVEL
+              value: "info"
           envFrom:
             - secretRef:
-                name: next-app-database-url
+                name: aub-clubs-runtime-secrets
           ports:
             - containerPort: 3000
               protocol: TCP

@@ -8,8 +8,8 @@ spec:
     spec:
       containers:
         - name: seed
-          image: hamzarach69/aub-clubs-seed:686b438
+          image: hamzarach69/aub-clubs-seed:b8ec74c
           envFrom:
             - secretRef:
-                name: next-app-database-url
+                name: aub-clubs-runtime-secrets
       restartPolicy: OnFailure

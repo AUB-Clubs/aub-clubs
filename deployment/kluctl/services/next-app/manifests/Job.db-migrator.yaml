@@ -15,9 +15,15 @@ spec:
           image: hamzarach69/aub-clubs-migrate:{{ apiNode.version }}
           args:
             - -path=/app/migrations
-            - -database=$(DATABASE_URL)?sslmode=disable
+            - -database=$(MIGRATION_DATABASE_URL)
             - up
+          env:
+            - name: MIGRATION_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: aub-clubs-runtime-secrets
+                  key: DIRECT_URL
           envFrom:
             - secretRef:
-                name: next-app-database-url
+                name: aub-clubs-runtime-secrets
       restartPolicy: OnFailure

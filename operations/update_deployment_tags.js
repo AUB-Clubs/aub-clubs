@@ -13,34 +13,29 @@ if (!newTag || !envName) {
   process.exit(1);
 }
 
-// Update next-app config
-const configPath = path.join(__dirname, `../deployment/kluctl/services/next-app/config/${envName}.yaml`);
+const serviceConfigs = [
+  {
+    path: path.join(__dirname, `../deployment/kluctl/services/next-app/config/${envName}.yaml`),
+    content: `apiNode:\n  version: ${newTag}\n`,
+  },
+  {
+    path: path.join(__dirname, `../deployment/kluctl/services/inference/config/${envName}.yaml`),
+    content: `inferenceNode:\n  version: ${newTag}\n`,
+  },
+  {
+    path: path.join(__dirname, `../deployment/kluctl/services/mcp-server/config/${envName}.yaml`),
+    content: `mcpServerNode:\n  version: ${newTag}\n`,
+  },
+];
 
-const configContent = `apiNode:
-  version: ${newTag}
-`;
-
-try {
-  fs.writeFileSync(configPath, configContent);
-  console.log(`Updated ${configPath} with version: ${newTag}`);
-} catch (error) {
-  console.error(`Error updating ${configPath}:`, error);
-  process.exit(1);
-}
-
-// Update inference config
-const inferenceConfigPath = path.join(__dirname, `../deployment/kluctl/services/inference/config/${envName}.yaml`);
-
-const inferenceConfigContent = `inferenceNode:
-  version: ${newTag}
-`;
-
-try {
-  fs.writeFileSync(inferenceConfigPath, inferenceConfigContent);
-  console.log(`Updated ${inferenceConfigPath} with version: ${newTag}`);
-} catch (error) {
-  console.error(`Error updating ${inferenceConfigPath}:`, error);
-  process.exit(1);
+for (const serviceConfig of serviceConfigs) {
+  try {
+    fs.writeFileSync(serviceConfig.path, serviceConfig.content);
+    console.log(`Updated ${serviceConfig.path} with version: ${newTag}`);
+  } catch (error) {
+    console.error(`Error updating ${serviceConfig.path}:`, error);
+    process.exit(1);
+  }
 }
 
 // Update seed job

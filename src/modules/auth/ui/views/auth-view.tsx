@@ -9,6 +9,8 @@ export function AuthView() {
   const searchParams = useSearchParams();
   const showVerification = searchParams.get("verify") === "true";
   const emailParam = searchParams.get("email");
+  const requestedTab = searchParams.get("tab");
+  const defaultTab = requestedTab === "sign-up" ? "sign-up" : "sign-in";
 
   if (showVerification) {
     return (
@@ -28,7 +30,7 @@ export function AuthView() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AuthTabs />
+          <AuthTabs defaultTab={defaultTab} />
         </CardContent>
       </Card>
     </div>

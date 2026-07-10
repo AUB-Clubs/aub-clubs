@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { createTRPCRouter } from '../../../trpc/init';
 import { prisma } from '@/lib/prisma';
 import { protectedProcedure, authProcedure } from '@/modules/auth/server/middleware';
+import { isUniversityAdminEmail } from '@/modules/auth/server/university-admin';
 import { moderateImage } from '@/modules/moderation/server/moderation';
 import { uploadFileToSupabase } from '@/lib/supabase-storage';
 
@@ -65,8 +66,10 @@ export const profileRouter = createTRPCRouter({
         },
       });
       if (!user) return null;
+      const isSelf = userId === ctx.user.id;
       return {
         ...user,
+        isUniversityAdmin: isSelf ? isUniversityAdminEmail(user.email) : false,
         registered_clubs: user.memberships.map((m) => ({
           role: m.role,
           club: {
@@ -76,6 +79,58 @@ export const profileRouter = createTRPCRouter({
             image: m.club.imageUrl,
           },
         })),
+      };
+    }),
+
+  getRegisteredClubs: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid().optional(),
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(50).default(5),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = input.userId ?? ctx.user.id;
+      const page = input.page;
+      const limit = input.limit;
+      const skip = (page - 1) * limit;
+
+      const [memberships, totalCount] = await Promise.all([
+        prisma.membership.findMany({
+          where: { userId },
+          take: limit,
+          skip,
+          orderBy: { joinedAt: 'desc' },
+          select: {
+            role: true,
+            club: {
+              select: {
+                id: true,
+                title: true,
+                crn: true,
+                imageUrl: true,
+              },
+            },
+          },
+        }),
+        prisma.membership.count({ where: { userId } }),
+      ]);
+
+      return {
+        items: memberships.map((m) => ({
+          role: m.role,
+          club: {
+            id: m.club.id,
+            Title: m.club.title,
+            CRN: m.club.crn,
+            image: m.club.imageUrl,
+          },
+        })),
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        page,
+        limit,
       };
     }),
 

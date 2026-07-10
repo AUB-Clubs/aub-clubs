@@ -5,6 +5,7 @@ import { createTRPCRouter } from "@/trpc/init";
 import { protectedProcedure } from "@/modules/auth/server/middleware";
 import { getOrComputeEventOverlapStats, recomputeEventOverlapStats } from "./cache-manager";
 import { classifyOverlap } from "./overlap-calculator";
+import { fetchMicrosoftCalendarView } from "./graph-client";
 
 const dayOfWeekSchema = z.enum([
   "MONDAY",
@@ -77,6 +78,13 @@ function refDateFromMinutes(minutes: number): Date {
   return new Date(Date.UTC(1970, 0, 1, 0, minutes, 0, 0));
 }
 
+async function getMicrosoftLinkForUser(userId: string) {
+  return prisma.userMicrosoftCalendarLink.findUnique({
+    where: { userId },
+    select: { id: true, accountEmail: true },
+  });
+}
+
 export const calendarRouter = createTRPCRouter({
   getStudentCalendar: protectedProcedure
     .input(
@@ -120,6 +128,35 @@ export const calendarRouter = createTRPCRouter({
 
       const myClubIds = new Set(memberships.map((m) => m.clubId));
 
+      const link = await getMicrosoftLinkForUser(ctx.user.id);
+
+      let outlookEvents: Array<{
+        id: string;
+        title: string;
+        startsAt: Date;
+        endsAt: Date;
+        isAllDay: boolean;
+        allDayStartDate: string | null;
+        allDayEndExclusiveDate: string | null;
+      }> = [];
+
+      if (link) {
+        try {
+          const raw = await fetchMicrosoftCalendarView(ctx.user.id, input.rangeStart, input.rangeEnd);
+          outlookEvents = raw.map((e) => ({
+            id: e.id,
+            title: e.title,
+            startsAt: e.startsAt,
+            endsAt: e.endsAt,
+            isAllDay: e.isAllDay,
+            allDayStartDate: e.allDayStartDate ?? null,
+            allDayEndExclusiveDate: e.allDayEndExclusiveDate ?? null,
+          }));
+        } catch {
+          outlookEvents = [];
+        }
+      }
+
       return {
         schedule: schedule.map((item) => ({
           id: item.id,
@@ -148,8 +185,24 @@ export const calendarRouter = createTRPCRouter({
             rsvpCount: event._count.registrations,
             viewerStatus: event.registrations[0]?.status ?? null,
           })),
+        outlookEvents,
       };
     }),
+
+  getMicrosoftConnectionStatus: protectedProcedure.query(async ({ ctx }) => {
+    const link = await getMicrosoftLinkForUser(ctx.user.id);
+    return {
+      connected: !!link,
+      accountEmail: link?.accountEmail ?? null,
+    };
+  }),
+
+  disconnectMicrosoft: protectedProcedure.mutation(async ({ ctx }) => {
+    await prisma.userMicrosoftCalendarLink.deleteMany({
+      where: { userId: ctx.user.id },
+    });
+    return { success: true };
+  }),
 
   createScheduleItem: protectedProcedure
     .input(scheduleItemInputSchema)

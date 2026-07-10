@@ -4,7 +4,10 @@ env:
   CLUSTER_NAME: aub-clubs-app
   GCP_REGION: us-central1
   GCP_ZONE: us-central1-a
+  GCP_PROJECT_ID: project-b2a5c546-f972-43e5-954
   CLUSTER_NAME_STAGING: aub-clubs-app-staging
+  EXTERNAL_SECRETS_GSA_NAME: aub-clubs-external-secrets
+  EXTERNAL_SECRETS_GSA_EMAIL: aub-clubs-external-secrets@project-b2a5c546-f972-43e5-954.iam.gserviceaccount.com
 
 tasks:
   helm-pull:
@@ -58,8 +61,6 @@ tasks:
 
   gcp:create-cluster:
     desc: "Create GKE cluster"
-    vars:
-      GCP_PROJECT_ID: project-b2a5c546-f972-43e5-954
     cmds:
       - |
         gcloud container clusters create ${CLUSTER_NAME} \
@@ -69,7 +70,7 @@ tasks:
           --machine-type e2-standard-2 \
           --num-nodes 2 \
           --gateway-api=standard \
-          --workload-pool={{.GCP_PROJECT_ID}}.svc.id.goog
+          --workload-pool=${GCP_PROJECT_ID}.svc.id.goog
 
   gcp:create-vpc-staging:
     cmds:
@@ -87,8 +88,6 @@ tasks:
 
   gcp:create-cluster-staging:
     desc: "Create GKE cluster"
-    vars:
-      GCP_PROJECT_ID: project-b2a5c546-f972-43e5-954
     cmds:
       - |
         gcloud container clusters create ${CLUSTER_NAME_STAGING} \
@@ -98,9 +97,35 @@ tasks:
           --machine-type e2-standard-2 \
           --num-nodes 2 \
           --gateway-api=standard \
-          --workload-pool={{.GCP_PROJECT_ID}}.svc.id.goog
+          --workload-pool=${GCP_PROJECT_ID}.svc.id.goog
 
-          --workload-pool={{.GCP_PROJECT_ID}}.svc.id.goog
+  secrets:bootstrap-workload-identity:
+    desc: "Create and bind the GCP service account used by External Secrets"
+    cmds:
+      - |
+        gcloud iam service-accounts describe ${EXTERNAL_SECRETS_GSA_EMAIL} --project=${GCP_PROJECT_ID} >/dev/null 2>&1 || \
+          gcloud iam service-accounts create ${EXTERNAL_SECRETS_GSA_NAME} \
+            --project=${GCP_PROJECT_ID} \
+            --display-name="AUB Clubs External Secrets"
+      - |
+        gcloud projects add-iam-policy-binding ${GCP_PROJECT_ID} \
+          --member="serviceAccount:${EXTERNAL_SECRETS_GSA_EMAIL}" \
+          --role="roles/secretmanager.secretAccessor"
+      - |
+        gcloud iam service-accounts add-iam-policy-binding ${EXTERNAL_SECRETS_GSA_EMAIL} \
+          --project=${GCP_PROJECT_ID} \
+          --role="roles/iam.workloadIdentityUser" \
+          --member="serviceAccount:${GCP_PROJECT_ID}.svc.id.goog[external-secrets/external-secrets]"
+
+  secrets:sync-staging:
+    desc: "Upload ../../.env as the staging JSON secret consumed by External Secrets"
+    cmds:
+      - node ../../operations/sync_gsm_env.js --project ${GCP_PROJECT_ID} --secret aub-clubs-staging-env --env-file ../../.env
+
+  secrets:sync-production:
+    desc: "Upload ../../.env as the production JSON secret consumed by External Secrets"
+    cmds:
+      - node ../../operations/sync_gsm_env.js --project ${GCP_PROJECT_ID} --secret aub-clubs-production-env --env-file ../../.env
 
   tls:create-secret-staging:
     desc: "Create TLS secret for staging"

@@ -29,15 +29,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <TRPCReactProvider>
-      <html lang="en">
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased selection:bg-primary/20 selection:text-primary`}
-        >
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <TRPCReactProvider>
           {children}
           <Toaster />
-        </body>
-      </html>
-    </TRPCReactProvider>
+        </TRPCReactProvider>
+      </body>
+    </html>
   );
 }
